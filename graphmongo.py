@@ -53,15 +53,16 @@ class GraphMongo(MongoClient):
 			if data is not None:
 				node["data"]=data
 
+
 			self[self._ddbb][self._node].insert(node)
 			return node
 		except:
 			return {"status":"ko"}
 
-	def AddEdge(self, edge=None, label=None, head=None, tail=None, data=None):
+	def AddEdge(self, edge=None, label=None, weight=0, head=None, tail=None, data=None):
 		'''
 		@brief: create a new edge in the ddbb
-		@param node: dictionary with an edge definition, params: _id, label, head (node 1), tail(node 2) and data
+		@param edge: dictionary with an edge definition, params: _id, label, head (node 1), tail(node 2) and data
 		@param label: relation name of the edge
 		@param data: extra information
 		@return: edge created in the ddbb, otherwise an error is returned as dictionary with status ko
@@ -81,7 +82,10 @@ class GraphMongo(MongoClient):
 				edge["label"]=label
 
 			if data is not None:
-				node["data"]=data
+				edge["data"]=data
+			
+			if "weight" not in edge.keys():
+				edge["weight"]=weight
 
 			if head is not None and tail is not None:
 				headref = DBRef(collection = "node", id = head["_id"], label = head["label"])
