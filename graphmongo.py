@@ -30,6 +30,14 @@ class GraphMongo(MongoClient):
 		'''
 		MongoClient.__init__(self,address,port)
 
+	def Clear(self):
+	        '''
+                @brief: remove all document of the ddbb
+             
+                '''
+		self[self._ddbb][self._node].remove()
+		self[self._ddbb][self._edge].remove()
+
 	def AddNode(self,node=None, label=None, data=None):
 		'''
 		@brief: create a new node in the ddbb
@@ -363,99 +371,100 @@ class GraphMongo(MongoClient):
 			return {"status":"ko"}
 
 
-######################## main test ########################
-		
-###test 0 basic
-###connect tail database
-graph = GraphMongo('localhost', 27018)
+if __name__ == '__main__':
+	###test 0 basic
+	###connect tail database
+	graph = GraphMongo('localhost', 27018)
 
-###create nodes
-print "create nodes"
-node1 = graph.AddNode(label="plate")
-node2 = graph.AddNode(label="sample")
-node3 = graph.AddNode(label="well")
-node4 = graph.AddNode(label="sample")
-node5 = graph.AddNode(label="sample")
-print node1
-print node2
-print node3
-print node4
+	graph.Clear()
 
-print "create edges"
-edge1 = graph.AddEdge(head=node1,tail=node2, label="has_sample") 
-edge2 = graph.AddEdge(head=node1,tail=node3, label="has_well") 
-edge3 = graph.AddEdge(head=node2,tail=node4, label="has_sample") 
-edge4 = graph.AddEdge(head=node2,tail=node3) 
-print edge1
-print edge2
+	###create nodes
+	print "create nodes"
+	node1 = graph.AddNode(label="plate")
+	node2 = graph.AddNode(label="sample")
+	node3 = graph.AddNode(label="well")
+	node4 = graph.AddNode(label="sample")
+	node5 = graph.AddNode(label="sample")
+	print node1
+	print node2
+	print node3
+	print node4
 
-print "update node"
-#node1["label"]="sample"
-#node1=graph.UpdateNode(node=node1)
-#print node1
+	print "create edges"
+	edge1 = graph.AddEdge(head=node1,tail=node2, label="has_sample") 
+	edge2 = graph.AddEdge(head=node1,tail=node3, label="has_well") 
+	edge3 = graph.AddEdge(head=node2,tail=node4, label="has_sample") 
+	edge4 = graph.AddEdge(head=node2,tail=node3) 
+	print edge1
+	print edge2
 
-print "update edge"
-edge4["weight"]=5
-edge4=graph.UpdateEdge(edge4)
-print edge4
+	print "update node"
+	#node1["label"]="sample"
+	#node1=graph.UpdateNode(node=node1)
+	#print node1
 
-print "removes edges"
-#graph.RemoveEdge(edge=edge1)
+	print "update edge"
+	edge4["weight"]=5
+	edge4=graph.UpdateEdge(edge4)
+	print edge4
 
-print "removes nodes"
-#graph.RemoveNode(node=node2)
+	print "removes edges"
+	#graph.RemoveEdge(edge=edge1)
 
-print "get nodes"
-print "fetch one node from a list"
-nodelist = [node1["_id"]]
-doc = graph.GetNodes(nodes=nodelist)
-print doc
- 
-print "query a node"
-doc = graph.GetNodes(label="plate")
-print doc
-doc = graph.GetNodes(query={"label":"plate"})
-print doc
+	print "removes nodes"
+	#graph.RemoveNode(node=node2)
 
-print "EDGES -> "
-edgelist = [edge1["_id"]]
-doc = graph.GetNodes(edges=edgelist)
-print doc
-doc = graph.GetNodes(edges=edgelist, direction="head")
-print doc
-doc = graph.GetNodes(edges=edgelist, direction="tail")
-print doc
+	print "get nodes"
+	print "fetch one node from a list"
+	nodelist = [node1["_id"]]
+	doc = graph.GetNodes(nodes=nodelist)
+	print doc
+	 
+	print "query a node"
+	doc = graph.GetNodes(label="plate")
+	print doc
+	doc = graph.GetNodes(query={"label":"plate"})
+	print doc
 
-print "query a edge"
-doc = graph.GetEdges(label="has_well")
-print doc
-doc = graph.GetEdges(query={"label":"has_well"})
-print doc
+	print "EDGES -> "
+	edgelist = [edge1["_id"]]
+	doc = graph.GetNodes(edges=edgelist)
+	print doc
+	doc = graph.GetNodes(edges=edgelist, direction="head")
+	print doc
+	doc = graph.GetNodes(edges=edgelist, direction="tail")
+	print doc
 
-
-print "get neighbour"
-nodelist = [node1["_id"]]
-docs = graph.GetNodes(nodes=nodelist,label="has_sample")
-print docs
-docs = graph.GetNodes(nodes=nodelist,label="*")
-print docs
+	print "query a edge"
+	doc = graph.GetEdges(label="has_well")
+	print doc
+	doc = graph.GetEdges(query={"label":"has_well"})
+	print doc
 
 
-#nodelist = [node1,node2]
-docs = graph.GetNodes(nodes=nodelist,label="*")
-print docs
+	print "get neighbour"
+	nodelist = [node1["_id"]]
+	docs = graph.GetNodes(nodes=nodelist,label="has_sample")
+	print docs
+	docs = graph.GetNodes(nodes=nodelist,label="*")
+	print docs
 
-docs = graph.GetNodes(nodes=nodelist,label="has_sample")
-print docs
-docs = graph.GetNodes(nodes=nodelist,label="has_sample",direction="head")
-print docs
-docs = graph.GetNodes(nodes=nodelist,label="has_sample",direction="tail")
-print docs
-docs = graph.GetNodes(label="has_sample",direction="tail")
-print docs
-docs = graph.GetNodes(label="has_sample",direction="tail")
-print docs
 
-docs = graph.GetNodes(query={"weight":5},direction="head")
-print docs
+	#nodelist = [node1,node2]
+	docs = graph.GetNodes(nodes=nodelist,label="*")
+	print docs
+
+	docs = graph.GetNodes(nodes=nodelist,label="has_sample")
+	print docs
+	docs = graph.GetNodes(nodes=nodelist,label="has_sample",direction="head")
+	print docs
+	docs = graph.GetNodes(nodes=nodelist,label="has_sample",direction="tail")
+	print docs
+	docs = graph.GetNodes(label="has_sample",direction="tail")
+	print docs
+	docs = graph.GetNodes(label="has_sample",direction="tail")
+	print docs
+
+	docs = graph.GetNodes(query={"weight":5},direction="head")
+	print docs
 
