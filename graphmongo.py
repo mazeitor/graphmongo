@@ -244,11 +244,40 @@ class GraphMongo(MongoClient):
                                 page = paging["page"]
                                 per_page = paging["per_page"]
 				elems = self.__paging(elems, page, per_page)
-
-			return list(elems)
+			
+			ids = [elem["_id"] for elem in elems]
+                        return ids
 		except:
 			return {"status":"ko"}
 
+
+        def Fetch(self, elems=None, type="node", projection=None, sort=None, paging=None):
+                try:
+                        query = {}
+                        ids = []
+                        ids = elems
+                        if len(ids) > 0:
+                                query["_id"]={}
+                                query["_id"]["$in"]=ids
+
+                        if projection is None:
+                                elems = self[self._ddbb][type].find(query)
+                        else:
+                                elems = self[self._ddbb][type].find(query,projection)
+
+                        ###sorting
+                        if sort is not None:
+                                elems = self.__sort(elems,sort)
+
+                        ###paging
+                        if paging is not None:
+                                page = paging["page"]
+                                per_page = paging["per_page"]
+                                elems = self.__paging(elems, page, per_page)
+
+                        return list(elems)
+                except:
+                        return {"status":"ko"}
 	
 	def GetEdges(self, edges=None, label=None, head=None, tail=None, direction=None, query=None, projection=None, sort=None, paging=None):
 		'''
@@ -372,8 +401,9 @@ class GraphMongo(MongoClient):
 				page = paging["page"]
 				per_page = paging["per_page"]
                                 elems = self.__paging(elems, page, per_page)
-
-			return list(elems)
+                        
+			ids = [elem["_id"] for elem in elems]
+			return ids
 		except:
 			return {"status":"ko"}
 
