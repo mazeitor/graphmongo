@@ -5,6 +5,8 @@ from bson.objectid import ObjectId
 import random
 import math
 import time
+import argparse
+
 
 '''
 Created on 01 July 2016
@@ -272,7 +274,7 @@ class GraphMongo(MongoClient):
 				query = {}
 				
 				###if there is no id tail get, then we will get everything
-				if len(elems) > 0:
+				if elems and len(elems) > 0:
 					query["_id"]={}
 					query["_id"]["$in"]=elems		
 
@@ -414,106 +416,14 @@ class GraphMongo(MongoClient):
 		except:
 			return {"status":"ko"}
 
-def test():
 
-	###test 0 basic
-	###connect tail database
-	graph = GraphMongo('localhost', 27018)
-	graph.Clear()
-
-	###create nodes
-	print "create nodes"
-	node1 = graph.AddNode(label="plate")
-	node2 = graph.AddNode(label="sample")
-	node3 = graph.AddNode(label="well")
-	node4 = graph.AddNode(label="sample")
-	node5 = graph.AddNode(label="sample")
-	print "node1: ",node1
-	print "node2: ",node2
-	print "node3: ",node3
-	print "node4: ",node4
-
-	print "\ncreate edges"
-	edge1 = graph.AddEdge(head=node1,tail=node2, label="has_sample") 
-	edge2 = graph.AddEdge(head=node1,tail=node3, label="has_well") 
-	edge3 = graph.AddEdge(head=node2,tail=node4, label="has_sample") 
-	edge4 = graph.AddEdge(head=node2,tail=node3) 
-	print "edge1: ",edge1
-	print "edge2: ",edge2
-	print "edge3: ",edge3
-	print "edge4: ",edge4
-
-	#print "\nupdate node"
-	#node1["label"]="sample"
-	#node1=graph.UpdateNode(node=node1)
-	#print node1
-
-	print "\nupdate edge"
-	edge4["weight"]=5
-	edge4=graph.UpdateEdge(edge4)
-	print edge4
-
-	#print "\nremoves edges"
-	#graph.RemoveEdge(edge=edge1)
-
-	#print "\nremoves nodes"
-	#graph.RemoveNode(node=node2)
-
-	print "\nget nodes"
-	print "fetch one node from a list"
-	nodelist = [node1["_id"]]
-	doc = graph.Fetch(elems=nodelist)
-	print doc
-	 
-	print "\nget nodes"
-	doc = graph.GetNodes(label="plate")
-	print doc
-	doc = graph.GetNodes(query={"label":"plate"})
-	print doc
-
-	print "\nget related nodes by nodes"
-	nodelist = [node1["_id"]]
-	docs = graph.GetNeighbours(nodes=nodelist,label="has_sample")
-	print docs
-	docs = graph.GetNeighbours(nodes=nodelist,label="has_sample",direction="head")
-	print docs
-	docs = graph.GetNeighbours(nodes=nodelist,label="has_sample",direction="tail")
-	print docs
-	
-	docs = graph.GetNeighbours(label="has_sample",direction="tail")
-	print docs
-	docs = graph.GetNeighbours(label="has_sample",direction="tail")
-	print docs
-
-	docs = graph.GetNeighbours(query={"weight":5},direction="head")
-	print docs
-
-	print "\nget related nodes by edges"
-	edgelist = [edge1["_id"]]
-	doc = graph.GetNeighbours(edges=edgelist)
-	print doc
-	doc = graph.GetNeighbours(edges=edgelist, direction="head")
-	print doc
-	doc = graph.GetNeighbours(edges=edgelist, direction="tail")
-	print doc
-
-	print "\nget edges"
-	doc = graph.GetEdges(label="has_well")
-	print doc
-	doc = graph.GetEdges(query={"label":"has_well"})
-	print doc
-
-
-def CreateNodeDijkstra():
+def CreateGraph():
 
 	##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
 	##remove all previous data, nodes and edges 
         graph.Clear()
 
-
-	##we are gonna create the graph used to test dijkstra algorithm https://es.wikipedia.org/wiki/Algoritmo_de_Dijkstra
-	
 	##create nodes
         node6 = graph.AddNode(weight=6)
         node5 = graph.AddNode(weight=5)
@@ -550,17 +460,72 @@ def CreateNodeDijkstra():
 	edge45 = graph.AddEdge(head=node4,tail=node5, weight=6)
         edge54 = graph.AddEdge(head=node5,tail=node4, weight=6)
         
-        ##get neighbours
-        nodelist = [node6["_id"]] ## or [node6]
-	nodes = graph.GetNeighbours(nodes=nodelist)
-	print nodes
-		
-	##Fetch nodes
-        nodes = graph.Fetch(elems=nodes)
+
+def Queries():
+	##create instance for graphAPI for mongodb
+        graph = GraphMongo('localhost', 27018)
+
+	print "QUERING"
+	print "\nGet one node"
+	nodes = graph.GetNodes(weight=6)
 	print nodes
 
+	print "\nGet all nodes"
+        nodes = graph.GetNodes()
+        print nodes
+
+	print "\nGet nodes by quering"
+	nodes = graph.GetNodes(query={"weight":{"$in":[5,6]}})
+	print nodes
+
+        print "\nFetch nodes from a list"
+        fetched = graph.Fetch(elems=nodes)
+        print fetched
+	
+	
+        print "\nget related nodes by nodes"
+        nodelist = nodes
+        docs = graph.GetNeighbours(nodes=nodelist,label="has_sample")
+        print docs
+        docs = graph.GetNeighbours(nodes=nodelist,label="has_sample",direction="head")
+        print docs
+        docs = graph.GetNeighbours(nodes=nodelist,label="has_sample",direction="tail")
+        print docs
+        docs = graph.GetNeighbours(label="has_sample",direction="tail")
+        print docs
+        docs = graph.GetNeighbours(label="has_sample",direction="tail")
+        print docs
+        docs = graph.GetNeighbours(query={"weight":5},direction="head")
+        print docs
+
+	'''
+        print "\nget related nodes by edges"
+        edgelist = [edge1["_id"]]
+        doc = graph.GetNeighbours(edges=edgelist)
+        print doc
+        doc = graph.GetNeighbours(edges=edgelist, direction="head")
+        print doc
+        doc = graph.GetNeighbours(edges=edgelist, direction="tail")
+        print doc
+
+        print "\nget edges"
+        doc = graph.GetEdges(label="has_well")
+        print doc
+        doc = graph.GetEdges(query={"label":"has_well"})
+        print doc
+	'''
 
 if __name__ == '__main__':
 
-	#CreateNodeDijkstra()
-	test()
+        parser = argparse.ArgumentParser(description="Testing GraphMongo API")
+        parser.add_argument("-c","--create",type=bool,required=False)
+        parser.add_argument("-t","--test",type=bool,required=False)
+        args=parser.parse_args()
+
+	if args.create is not None and args.create == True:
+		print "creating new graph"
+		CreateGraph()
+	
+	if args.test is not None and args.test == True:
+		print "testing graph"
+		Queries()
