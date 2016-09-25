@@ -30,19 +30,25 @@ class GraphMongo(MongoClient):
 		'''
 		MongoClient.__init__(self,address,port)
 
-	def Clear(self):
+	def Clear(self, nodes=True, edges=True):
 	        '''
-                @brief: remove all document of the ddbb
+                @brief: remove all nodes and edges of the ddbb taking account the params
              
+		@param nodes: option to delete all nodes
+		@param edges: option to delete all edges
                 '''
-		self[self._ddbb][self._node].remove()
-		self[self._ddbb][self._edge].remove()
+		if nodes:
+			self[self._ddbb][self._node].remove()
+		if edges:
+			self[self._ddbb][self._edge].remove()
 
-	def AddNode(self,node=None, label=None, data=None):
+
+	def AddNode(self,node=None, label=None, weight=None, data=None):
 		'''
 		@brief: create a new node in the ddbb
 		@param node: dictionary with a node definition, params: _id, label and data
 		@param label: type name of the node
+		@param weight: weight of the node
 		@param data: extra information
 		@return: node created in the ddbb otherwise an error is returned as dictionary with status=ko  
 		'''	
@@ -54,11 +60,15 @@ class GraphMongo(MongoClient):
 			if node["_id"] is None:
 				node["_id"]=ObjectId()
 
+			##if label is not None or "label" not in edge.keys() or edge["label"] is None:
 			if label is not None:
 				node["label"]=label
 
+			if weight is not None:
+				node["weight"]=weight
+                       
 			if data is not None:
-				node["data"]=data
+                                node["data"]=data
 
 
 			self[self._ddbb][self._node].insert(node)
@@ -66,11 +76,12 @@ class GraphMongo(MongoClient):
 		except:
 			return {"status":"ko"}
 
-	def AddEdge(self, edge=None, label=None, weight=0, head=None, tail=None, data=None):
+	def AddEdge(self, edge=None, label=None, weight=None, head=None, tail=None, data=None):
 		'''
 		@brief: create a new edge in the ddbb
 		@param edge: dictionary with an edge definition, params: _id, label, head (node 1), tail(node 2) and data
 		@param label: relation name of the edge
+                @param weight: weight of the edge
 		@param data: extra information
 		@return: edge created in the ddbb, otherwise an error is returned as dictionary with status ko
         	'''
@@ -83,18 +94,20 @@ class GraphMongo(MongoClient):
 			if edge["_id"] is None:
 				edge["_id"]=ObjectId()
 
-			if label is not None or "label" not in edge.keys() or edge["label"] is None:
+			if label is not None:
 				edge["label"]=label
 
 			if data is not None:
 				edge["data"]=data
 			
-			if "weight" not in edge.keys():
-				edge["weight"]=weight
+			######if "weight" not in edge.keys():
+			######	edge["weight"]=weight
+                        if weight is not None:
+                                edge["weight"]=weight
 
 			if head is not None and tail is not None:
-                                headref = {"_id" : head["_id"], "label" : head["label"]}
-                                tailref = {"_id" : tail["_id"], "label" : tail["label"]}
+                                headref = {"_id" : head["_id"]} #"label" : head["label"]}
+                                tailref = {"_id" : tail["_id"]} #"label" : tail["label"]}
 
 				edge["head"]=headref
 				edge["tail"]=tailref
@@ -206,36 +219,6 @@ class GraphMongo(MongoClient):
                         return {"status":"ko"}
 
 
-	def __Get(self, elems=None, type=None, query=None):
-		'''
-		@brief: generic get function get an element head the ddbb with a parametrized resource, node or edge
-		@param elems: list of ObjectId's 
-		@param type: type element, node or edge
-		@param query: mongodb expression query applyed in the ddbb
-		@return: list of nodes, otherwise an error is returned as dictionary with status ko
-		'''
-		try:	
-			###at the moment the query result applied is or by list of id's or the query passed as a parameter
-			if query is None:
-				query = {}
-				
-				###if there is no id tail get, then we will get everything
-				if len(elems) > 0:
-					query["_id"]={}
-					query["_id"]["$in"]=elems		
-
-			if type is None:
-				return {"status":"ko"}
-			else:
-				projection = {"_id":1}
-				elems = self[self._ddbb][type].find(query,projection)
-		
-			ids = [elem["_id"] for elem in elems]
-                        return ids
-		except:
-			return {"status":"ko"}
-
-
         def Fetch(self, elems=None, type="node", projection=None, sort=None, paging=None):
                 '''
                 @brief: generic fetch function to grasp from ddbb a list of elements
@@ -273,7 +256,38 @@ class GraphMongo(MongoClient):
                         return list(elems)
                 except:
                         return {"status":"ko"}
+
 	
+	def __Get(self, elems=None, type=None, query=None):
+		'''
+		@brief: generic get function get an element head the ddbb with a parametrized resource, node or edge
+		@param elems: list of ObjectId's 
+		@param type: type element, node or edge
+		@param query: mongodb expression query applyed in the ddbb
+		@return: list of nodes, otherwise an error is returned as dictionary with status ko
+		'''
+		try:	
+			###at the moment the query result applied is or by list of id's or the query passed as a parameter
+			if query is None:
+				query = {}
+				
+				###if there is no id tail get, then we will get everything
+				if len(elems) > 0:
+					query["_id"]={}
+					query["_id"]["$in"]=elems		
+
+			if type is None:
+				return {"status":"ko"}
+			else:
+				projection = {"_id":1}
+				elems = self[self._ddbb][type].find(query,projection)
+		
+			ids = [elem["_id"] for elem in elems]
+                        return ids
+		except:
+			return {"status":"ko"}
+
+
 	def GetEdges(self, edges=None, label=None, head=None, tail=None, direction=None, query=None):
 		'''
                 @brief: get list of edges given id's, label or quering
@@ -289,41 +303,59 @@ class GraphMongo(MongoClient):
                 return self.__Get(elems=edges,type="edge", query=query )
 
 
-	def GetNodes(self, nodes=None, edges=None, label=None, direction=None, query=None):
+	def GetNodes(self, label=None, weight=None, direction=None, query=None):
 	        '''
-                @brief: get list of nodes given id's or nodes related with the nodes given the label
-                @param nodes: list of ObjectId's of nodes
-		@param edges: list of ObjectId's of edges
+                @brief: get list of nodes given label, weight or other kind of query
                 @param label: label of the node or relation
-		@param direction: direction of the relation, "head|tail"
+                @param weight: weight of the node or relation
                 @param query: mongodb expression query applyed in the ddbb
                 @return: list of nodes, otherwise an error is returned as dictionary with status ko
                 '''
-		### if edges or label and direction are specified means you wanna fetch the related nodes
-		if (nodes is not None and (label is not None or direction is not None)) or (nodes is None and (label is not None and direction is not None)) or (query is not None and direction is not None) or (edges is not None): 
-			if label == "*": 
-				label = None
+		try:
+			elems=[]
+			if label is not None:
+				if query is None:
+					query = {}
+				query.update({"label" : label})
 
-			elems = []
-			if nodes is None and edges is None:
-				elems = self.__GetNodeNeighbours(label=label,query=query,direction=direction )
-			elif nodes is not None and edges is None:
-				elems = self.__GetNodeNeighbours(nodes=nodes,label=label,query=query, direction=direction)
-			elif nodes is None and edges is not None:
-				elems += self.__GetNodeNeighbours(edges=edges, direction=direction)
-			return elems
-		else: ### if label and direction are not specify means you want fetch the nodes given in the param
-			if query is None and label is not None:
-                                query = {}
-                        	query.update({"label":label})
-                        return self.__Get(elems=nodes,type="node", query=query)
+			if weight is not None:
+				if query is None:
+					query = {}
+				query.update({"weight" : weight})
+			#project = {"_id" : 1}
+			#elems = self[self._ddbb][self._node].find(query,project)
+			#elems = [elem["_id"] for elem in elems]
+			return self.__Get(type="node", query=query)
+		except:
+	                return {"status":"ko"}
 
-        def __GetNodeNeighbours(self, nodes=None, edges=None, label=None, query=None, direction=None):
+
+	def GetNeighbours(self, nodes=None, edges=None, label=None, weight=None, direction=None, query=None):
+                '''
+                @brief: get list of related nodes given nodes or related nodes with edges
+                @param nodes: list of ObjectId's of nodes
+                @param edges: list of ObjectId's of edges
+                @param label: label of the node or relation
+                @param weight: weight of the node or relation
+                @param direction: direction of the relation, "head|tail"
+                @param query: mongodb expression query applyed in the ddbb
+                @return: list of nodes, otherwise an error is returned as dictionary with status ko
+                '''
+                elems=[]
+                if edges is not None:
+                        elems += self.__GetNodeNeighbours(edges=edges, direction=direction)
+                else:
+			elems = self.__GetNodeNeighbours(nodes=nodes, label=label, weight=weight, query=query, direction=direction)
+                return elems
+
+
+        def __GetNodeNeighbours(self, nodes=None, edges=None, label=None, weight=None, query=None, direction=None):
                 '''
                 @brief: get list of nodes related with the nodes given in the parameter, also label and direction can be specified
-                @param nodes: nodes head or tail
+                @param nodes: list of ObjectId's of nodes tail or head
 		@param edges: list of ObjectId's of edges
                 @param label: label of the node or relation
+                @param weight: weight of the node or relation
 		@param direction: direction of the relation, head or tail
                 @param projection: list of attributes you want retrive {"attribute_name":"false|true",...}
                 @param sort: list of attributes you want sort the results in mongodb sort format, {"attributename":"ascending|descending",...}
@@ -351,31 +383,42 @@ class GraphMongo(MongoClient):
 					query = {}
 				query.update({"label" : label})
 
-			if edges is not None:
+                        if weight is not None:
+                                if query is None:
+                                        query = {}
+                                query.update({"weight" : weight})
+
+			if nodes is None and edges is not None:
+				if edges and any(not isinstance(edge,(ObjectId)) for edge in edges):
+                                	edges = [edge["_id"] for edge in edges]
+
                                 match = {"$match" : {"_id" : {"$in" : edges}}}
                                 project = {"$project" : {"_id" : "${0}._id".format(TO)}}
                                 elems = self[self._ddbb][self._edge].aggregate([match,project])
+			elif nodes is not None and edges is not None:
+				pass
 			else:		
 				if query is not None:
 	                                match = {"$match" : query}
                                         project = {"$project" : {"_id" : "${0}._id".format(TO)}}
                                         elems = self[self._ddbb][self._edge].aggregate([match,project])
-				else:		
+				else:
+					if nodes and any(not isinstance(node,(ObjectId)) for node in nodes):
+						nodes = [node["_id"] for node in nodes]
+	
 					match = {"$match" : {"{0}._id".format(FROM) : {"$in" : nodes}}}
 					project = {"$project" : {"_id" : "${0}._id".format(TO)}}
 					elems = self[self._ddbb][self._edge].aggregate([match,project])
-
 			ids = [elem["_id"] for elem in elems]
 			return ids
 		except:
 			return {"status":"ko"}
 
+def test():
 
-if __name__ == '__main__':
 	###test 0 basic
 	###connect tail database
 	graph = GraphMongo('localhost', 27018)
-
 	graph.Clear()
 
 	###create nodes
@@ -385,86 +428,139 @@ if __name__ == '__main__':
 	node3 = graph.AddNode(label="well")
 	node4 = graph.AddNode(label="sample")
 	node5 = graph.AddNode(label="sample")
-	print node1
-	print node2
-	print node3
-	print node4
+	print "node1: ",node1
+	print "node2: ",node2
+	print "node3: ",node3
+	print "node4: ",node4
 
-	print "create edges"
+	print "\ncreate edges"
 	edge1 = graph.AddEdge(head=node1,tail=node2, label="has_sample") 
 	edge2 = graph.AddEdge(head=node1,tail=node3, label="has_well") 
 	edge3 = graph.AddEdge(head=node2,tail=node4, label="has_sample") 
 	edge4 = graph.AddEdge(head=node2,tail=node3) 
-	print edge1
-	print edge2
+	print "edge1: ",edge1
+	print "edge2: ",edge2
+	print "edge3: ",edge3
+	print "edge4: ",edge4
 
-	print "update node"
+	#print "\nupdate node"
 	#node1["label"]="sample"
 	#node1=graph.UpdateNode(node=node1)
 	#print node1
 
-	print "update edge"
+	print "\nupdate edge"
 	edge4["weight"]=5
 	edge4=graph.UpdateEdge(edge4)
 	print edge4
 
-	print "removes edges"
+	#print "\nremoves edges"
 	#graph.RemoveEdge(edge=edge1)
 
-	print "removes nodes"
+	#print "\nremoves nodes"
 	#graph.RemoveNode(node=node2)
 
-	print "get nodes"
+	print "\nget nodes"
 	print "fetch one node from a list"
 	nodelist = [node1["_id"]]
-	doc = graph.GetNodes(nodes=nodelist)
+	doc = graph.Fetch(elems=nodelist)
 	print doc
 	 
-	print "query a node"
+	print "\nget nodes"
 	doc = graph.GetNodes(label="plate")
 	print doc
 	doc = graph.GetNodes(query={"label":"plate"})
 	print doc
 
-	print "EDGES -> "
+	print "\nget related nodes by nodes"
+	nodelist = [node1["_id"]]
+	docs = graph.GetNeighbours(nodes=nodelist,label="has_sample")
+	print docs
+	docs = graph.GetNeighbours(nodes=nodelist,label="has_sample",direction="head")
+	print docs
+	docs = graph.GetNeighbours(nodes=nodelist,label="has_sample",direction="tail")
+	print docs
+	
+	docs = graph.GetNeighbours(label="has_sample",direction="tail")
+	print docs
+	docs = graph.GetNeighbours(label="has_sample",direction="tail")
+	print docs
+
+	docs = graph.GetNeighbours(query={"weight":5},direction="head")
+	print docs
+
+	print "\nget related nodes by edges"
 	edgelist = [edge1["_id"]]
-	doc = graph.GetNodes(edges=edgelist)
+	doc = graph.GetNeighbours(edges=edgelist)
 	print doc
-	doc = graph.GetNodes(edges=edgelist, direction="head")
+	doc = graph.GetNeighbours(edges=edgelist, direction="head")
 	print doc
-	doc = graph.GetNodes(edges=edgelist, direction="tail")
+	doc = graph.GetNeighbours(edges=edgelist, direction="tail")
 	print doc
 
-	print "query a edge"
+	print "\nget edges"
 	doc = graph.GetEdges(label="has_well")
 	print doc
 	doc = graph.GetEdges(query={"label":"has_well"})
 	print doc
 
 
-	print "get neighbour"
-	nodelist = [node1["_id"]]
-	docs = graph.GetNodes(nodes=nodelist,label="has_sample")
-	print docs
-	docs = graph.GetNodes(nodes=nodelist,label="*")
-	print docs
+def CreateNodeDijkstra():
+
+	##create instance for graphAPI for mongodb
+        graph = GraphMongo('localhost', 27018)
+	##remove all previous data, nodes and edges 
+        graph.Clear()
 
 
-	#nodelist = [node1,node2]
-	docs = graph.GetNodes(nodes=nodelist,label="*")
-	print docs
+	##we are gonna create the graph used to test dijkstra algorithm https://es.wikipedia.org/wiki/Algoritmo_de_Dijkstra
+	
+	##create nodes
+        node6 = graph.AddNode(weight=6)
+        node5 = graph.AddNode(weight=5)
+        node3 = graph.AddNode(weight=3)
+        node1 = graph.AddNode(weight=1)
+        node2 = graph.AddNode(weight=2)
+        node4 = graph.AddNode(weight=4)
+	
+	##create edges
+        edge65 = graph.AddEdge(head=node6,tail=node2, weight=9)
+        edge56 = graph.AddEdge(head=node5,tail=node6, weight=9)
+        
+	edge61 = graph.AddEdge(head=node6,tail=node1, weight=14)
+        edge16 = graph.AddEdge(head=node1,tail=node6, weight=14)
+	
+	edge63 = graph.AddEdge(head=node6,tail=node3, weight=2)
+        edge36 = graph.AddEdge(head=node3,tail=node6, weight=2)
+	
+	edge13 = graph.AddEdge(head=node1,tail=node3, weight=9)
+        edge31 = graph.AddEdge(head=node3,tail=node1, weight=9)
+        
+	edge12 = graph.AddEdge(head=node1,tail=node2, weight=7)
+        edge21 = graph.AddEdge(head=node2,tail=node1, weight=7)
+        
+	edge23 = graph.AddEdge(head=node2,tail=node3, weight=10)
+        edge32 = graph.AddEdge(head=node3,tail=node2, weight=10)
 
-	docs = graph.GetNodes(nodes=nodelist,label="has_sample")
-	print docs
-	docs = graph.GetNodes(nodes=nodelist,label="has_sample",direction="head")
-	print docs
-	docs = graph.GetNodes(nodes=nodelist,label="has_sample",direction="tail")
-	print docs
-	docs = graph.GetNodes(label="has_sample",direction="tail")
-	print docs
-	docs = graph.GetNodes(label="has_sample",direction="tail")
-	print docs
+	edge24 = graph.AddEdge(head=node2,tail=node2, weight=15)
+	edge42 = graph.AddEdge(head=node4,tail=node4, weight=15)
+	
+        edge34 = graph.AddEdge(head=node3,tail=node4, weight=11)
+        edge43 = graph.AddEdge(head=node4,tail=node3, weight=11)
+        
+	edge45 = graph.AddEdge(head=node4,tail=node5, weight=6)
+        edge54 = graph.AddEdge(head=node5,tail=node4, weight=6)
+        
+        ##get neighbours
+        nodelist = [node6["_id"]] ## or [node6]
+	nodes = graph.GetNeighbours(nodes=nodelist)
+	print nodes
+		
+	##Fetch nodes
+        nodes = graph.Fetch(elems=nodes)
+	print nodes
 
-	docs = graph.GetNodes(query={"weight":5},direction="head")
-	print docs
 
+if __name__ == '__main__':
+
+	#CreateNodeDijkstra()
+	test()
