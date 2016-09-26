@@ -290,7 +290,7 @@ class GraphMongo(MongoClient):
 			return {"status":"ko"}
 
 
-	def GetEdges(self, edges=None, label=None, weight=None, head=None, tail=None, direction=None, query=None):
+	def GetEdges(self, edges=None, label=None, weight=None, direction=None, query=None):
 		'''
                 @brief: get list of edges given id's, label or quering
                 @param edges: list of edges
@@ -352,10 +352,10 @@ class GraphMongo(MongoClient):
                 @return: list of nodes, otherwise an error is returned as dictionary with status ko
                 '''
                 elems=[]
-                if edges is not None:
+                if nodes is None and edges is not None:
                         elems += self.__GetNodeNeighbours(edges=edges, direction=direction)
-                else:
-			elems = self.__GetNodeNeighbours(nodes=nodes, label=label, weight=weight, query=query, direction=direction)
+		else:
+			elems = self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction=direction)
                 return elems
 
 
@@ -406,15 +406,28 @@ class GraphMongo(MongoClient):
                                 project = {"$project" : {"_id" : "${0}._id".format(TO)}}
                                 elems = self[self._ddbb][self._edge].aggregate([match,project])
 			elif nodes is not None and edges is not None:
-				pass
+                                if nodes and any(not isinstance(node,(ObjectId)) for node in nodes):
+	                                nodes = [node["_id"] for node in nodes]
+                                if edges and any(not isinstance(edge,(ObjectId)) for edge in edges):
+                                        edges = [edge["_id"] for edge in edges]
+
+				if query:	
+					query = {"$and":[{"_id" : {"$in" : edges}},{"{0}._id".format(FROM) : {"$in" : nodes}},query]}
+                                else:
+					query = {"$and":[{"_id" : {"$in" : edges}},{"{0}._id".format(FROM) : {"$in" : nodes}}]}
+				match = {"$match" : query}
+                                project = {"$project" : {"_id" : "${0}._id".format(TO)}}
+                                elems = self[self._ddbb][self._edge].aggregate([match,project])
 			else:	
 				if nodes and any(not isinstance(node,(ObjectId)) for node in nodes):
                                                 nodes = [node["_id"] for node in nodes]
 
 				if query is not None:
-					if nodes:
+					if query:
 						query = {"$and":[{"{0}._id".format(FROM) : {"$in" : nodes}},query]}
-	                                match = {"$match" : query}
+	                                else:
+						query = {"$and":[{"{0}._id".format(FROM) : {"$in" : nodes}}]}
+					match = {"$match" : query}
                                         project = {"$project" : {"_id" : "${0}._id".format(TO)}}
                                         elems = self[self._ddbb][self._edge].aggregate([match,project])
 				else:
@@ -541,6 +554,10 @@ def Queries():
 	print "\nFetch edges from a list"
 	fetched = graph.Fetch(elems=edges, type="edge")
 	print fetched
+
+	print "\nGet nodes given list of nodes and list of edges"
+	nodes = graph.GetNeighbours(nodes=nodes, edges=edges)
+	print nodes
 
 if __name__ == '__main__':
 
