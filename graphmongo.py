@@ -285,24 +285,35 @@ class GraphMongo(MongoClient):
 				elems = self[self._ddbb][type].find(query,projection)
 		
 			ids = [elem["_id"] for elem in elems]
-                        return ids
+                        return list(set(ids))
 		except:
 			return {"status":"ko"}
 
 
-	def GetEdges(self, edges=None, label=None, head=None, tail=None, direction=None, query=None):
+	def GetEdges(self, edges=None, label=None, weight=None, head=None, tail=None, direction=None, query=None):
 		'''
                 @brief: get list of edges given id's, label or quering
-                @param nodes: list of edges to fetch
-                @param label: label of the node or relation
+                @param edges: list of edges
+		@param label: label of the node or relation
+                @param weight: weight of the node or relation
                 @param direction: direction of the relation, "head|tail"
                 @param query: mongodb expression query applyed in the ddbb
 		@return list of edges, otherwise an error is returned as dictionary with status ko
 		'''
-                if query is None and label is not None:
-	                query = {}
-                        query.update({"label":label})
-                return self.__Get(elems=edges,type="edge", query=query )
+                try:
+                        elems=[]
+                        if label is not None:
+                                if query is None:
+                                        query = {}
+                                query.update({"label" : label})
+
+                        if weight is not None:
+                                if query is None:
+                                        query = {}
+                                query.update({"weight" : weight})
+                        return self.__Get(elems=edges, type="edge", query=query)
+                except:
+                        return {"status":"ko"}
 
 
 	def GetNodes(self, label=None, weight=None, direction=None, query=None):
@@ -324,9 +335,6 @@ class GraphMongo(MongoClient):
 				if query is None:
 					query = {}
 				query.update({"weight" : weight})
-			#project = {"_id" : 1}
-			#elems = self[self._ddbb][self._node].find(query,project)
-			#elems = [elem["_id"] for elem in elems]
 			return self.__Get(type="node", query=query)
 		except:
 	                return {"status":"ko"}
@@ -399,20 +407,22 @@ class GraphMongo(MongoClient):
                                 elems = self[self._ddbb][self._edge].aggregate([match,project])
 			elif nodes is not None and edges is not None:
 				pass
-			else:		
+			else:	
+				if nodes and any(not isinstance(node,(ObjectId)) for node in nodes):
+                                                nodes = [node["_id"] for node in nodes]
+
 				if query is not None:
+					if nodes:
+						query = {"$and":[{"{0}._id".format(FROM) : {"$in" : nodes}},query]}
 	                                match = {"$match" : query}
                                         project = {"$project" : {"_id" : "${0}._id".format(TO)}}
                                         elems = self[self._ddbb][self._edge].aggregate([match,project])
 				else:
-					if nodes and any(not isinstance(node,(ObjectId)) for node in nodes):
-						nodes = [node["_id"] for node in nodes]
-	
 					match = {"$match" : {"{0}._id".format(FROM) : {"$in" : nodes}}}
 					project = {"$project" : {"_id" : "${0}._id".format(TO)}}
 					elems = self[self._ddbb][self._edge].aggregate([match,project])
 			ids = [elem["_id"] for elem in elems]
-			return ids
+			return list(set(ids))
 		except:
 			return {"status":"ko"}
 
@@ -482,38 +492,55 @@ def Queries():
         fetched = graph.Fetch(elems=nodes)
         print fetched
 	
-	
         print "\nget related nodes by nodes"
-        nodelist = nodes
-        docs = graph.GetNeighbours(nodes=nodelist,label="has_sample")
-        print docs
-        docs = graph.GetNeighbours(nodes=nodelist,label="has_sample",direction="head")
-        print docs
-        docs = graph.GetNeighbours(nodes=nodelist,label="has_sample",direction="tail")
-        print docs
-        docs = graph.GetNeighbours(label="has_sample",direction="tail")
-        print docs
-        docs = graph.GetNeighbours(label="has_sample",direction="tail")
-        print docs
-        docs = graph.GetNeighbours(query={"weight":5},direction="head")
+	print "\nget related nodes given a list of nodes"
+        docs = graph.GetNeighbours(nodes=nodes) 
         print docs
 
-	'''
+	print "\nget related nodes given a list of nodes and the weight of the edges"
+        docs = graph.GetNeighbours(nodes=nodes,weight=6)
+        print docs
+	print "\nget related nodes given a list of nodes and query for the weight of the edges"
+        docs = graph.GetNeighbours(nodes=nodes,query={"weight":{"$in":[2,14,6]}})
+        print docs
+
+	print "\nget nodes FROM given a list of nodes and weight, in a directed graph"
+	docs = graph.GetNeighbours(nodes=nodes,weight=6,direction="head")
+        print docs
+        print "\nget nodes TO given a list of nodes and weight, in a directed graph"
+        docs = graph.GetNeighbours(nodes=nodes,weight=6,direction="tail")
+        print docs
+       
+	print "\nget nodes FROM given a weight, in a directed graph"	
+	docs = graph.GetNeighbours(weight=6,direction="head")
+        print docs
+        print "\nget nodes TO given a weight, in a directed graph"
+        docs = graph.GetNeighbours(weight=6,direction="tail")
+        print docs
+	print "\nget nodes FROM given a query by weight, in a directed graph"
+        docs = graph.GetNeighbours(query={"weight":{"$in":[6,15]}},direction="head")
+        print docs
+	
+	print "\nget edges by weight"
+	edges = graph.GetEdges(weight=6)
+	print edges
+        print "\nget edges quering by weight"
+        edges = graph.GetEdges(query={"weight":6})
+        print edges
+
         print "\nget related nodes by edges"
-        edgelist = [edge1["_id"]]
-        doc = graph.GetNeighbours(edges=edgelist)
+        doc = graph.GetNeighbours(edges=edges)
         print doc
-        doc = graph.GetNeighbours(edges=edgelist, direction="head")
+	print "\nget nodes FROM by edges"
+        doc = graph.GetNeighbours(edges=edges, direction="head")
         print doc
-        doc = graph.GetNeighbours(edges=edgelist, direction="tail")
+        print "\nget nodes TO by edges"
+        doc = graph.GetNeighbours(edges=edges, direction="tail")
         print doc
 
-        print "\nget edges"
-        doc = graph.GetEdges(label="has_well")
-        print doc
-        doc = graph.GetEdges(query={"label":"has_well"})
-        print doc
-	'''
+	print "\nFetch edges from a list"
+	fetched = graph.Fetch(elems=edges, type="edge")
+	print fetched
 
 if __name__ == '__main__':
 
