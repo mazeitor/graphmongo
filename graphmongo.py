@@ -118,7 +118,7 @@ class GraphMongo(MongoClient):
 					headref = {"_id" : head["_id"]}
                         		tailref = {"_id" : tail["_id"]}
 			
-				edge["head"]={headref,tailref}
+				edge["head"]=headref
                                 edge["tail"]=tailref
 	
 			self[self._ddbb][self._edge].insert(edge)
@@ -444,6 +444,40 @@ class GraphMongo(MongoClient):
 		except:
 			return {"status":"ko"}
 
+	####### measures and metrics
+	def VertexCount(self):
+		'''
+		@brief: gives a count of the number of vertices in the graph
+		@return: number of nodes
+		'''
+		return self[self._ddbb][self._node].count()
+
+
+	def EdgeCount(self):
+		'''
+		@brief: gives a count of the number of edges in the graph
+		@return: numeber of edges
+		'''
+		return self[self._ddbb][self._edge].count()
+
+	def VertexDegree(self, nodes=None):
+		'''
+		@brief: gives the list of vertex degrees for all nodes or nodes passed in the parameter in the graph
+		@param nodes: list of nodes
+		@return: dictionary with the nodeid and its degree
+		'''
+		elems={}
+		if nodes is None:
+			nodes = []	
+			nodes = self.GetNodes()
+	
+		for node in nodes:
+		        outdegree = self.__GetNodeNeighbours(nodes=[node],direction="tail")
+	                indegree = self.__GetNodeNeighbours(nodes=[node],direction="head")
+			degree = len(outdegree)+len(indegree)
+			elems[node]=degree
+		return elems	
+
 
 def CreateDirectedGraph():
 
@@ -462,7 +496,7 @@ def CreateDirectedGraph():
         node9 = graph.AddNode(weight=9)
 	
 	##create edges
-        edge65 = graph.AddEdge(head=node6,tail=node2, weight=9)
+        edge65 = graph.AddEdge(head=node6,tail=node5, weight=9)
         edge56 = graph.AddEdge(head=node5,tail=node6, weight=9)
         
 	edge61 = graph.AddEdge(head=node6,tail=node1, weight=14)
@@ -601,6 +635,34 @@ def Queries():
 	nodes = graph.GetNeighbours(nodes=nodes, edges=edges)
 	print nodes
 
+def Metrics():
+
+        ##create instance for graphAPI for mongodb
+        graph = GraphMongo('localhost', 27018)
+
+	print "##### Basic Measures #####"
+	print "\nVertex Count"
+	vertex = graph.VertexCount()
+	print vertex
+
+	print "\nEdges Count"
+	edges = graph.EdgeCount()
+	print edges
+
+	print "\n#####Degree Measures #####"
+	print "\nVertex Degree"
+	vd = graph.VertexDegree()
+	print vd
+	nodes = graph.GetNodes()
+	print "\nVertex degree for a node"
+	vd = graph.VertexDegree(nodes=[nodes[0]])
+	print vd
+	print "\nVertex degree for a list of nodes"
+	vd = graph.VertexDegree(nodes=nodes)
+	print vd
+
+
+
 if __name__ == '__main__':
 
         parser = argparse.ArgumentParser(description="Testing GraphMongo API")
@@ -610,8 +672,10 @@ if __name__ == '__main__':
 
 	if args.create is not None and args.create == True:
 		print "creating new graph"
-		CreateSimpleGraph()
+		CreateDirectedGraph()
 	
 	if args.test is not None and args.test == True:
 		print "testing graph"
-		Queries()
+		#Queries()
+		Metrics()
+	
