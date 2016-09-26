@@ -78,13 +78,14 @@ class GraphMongo(MongoClient):
 		except:
 			return {"status":"ko"}
 
-	def AddEdge(self, edge=None, label=None, weight=None, head=None, tail=None, data=None):
+	def AddEdge(self, edge=None, label=None, weight=None, head=None, tail=None, data=None, type="directed"):
 		'''
 		@brief: create a new edge in the ddbb
 		@param edge: dictionary with an edge definition, params: _id, label, head (node 1), tail(node 2) and data
 		@param label: relation name of the edge
                 @param weight: weight of the edge
 		@param data: extra information
+		@param type: type of the edge, "directed" or "simple"
 		@return: edge created in the ddbb, otherwise an error is returned as dictionary with status ko
         	'''
 		try:
@@ -102,18 +103,24 @@ class GraphMongo(MongoClient):
 			if data is not None:
 				edge["data"]=data
 			
-			######if "weight" not in edge.keys():
-			######	edge["weight"]=weight
                         if weight is not None:
                                 edge["weight"]=weight
+		
+			if type is not None and type not in ["directed","simple"]:
+				return {"status":"ko"}
+			else:
+				edge["type"]=type
 
 			if head is not None and tail is not None:
-                                headref = {"_id" : head["_id"]} #"label" : head["label"]}
-                                tailref = {"_id" : tail["_id"]} #"label" : tail["label"]}
-
-				edge["head"]=headref
-				edge["tail"]=tailref
-
+				if type == "simple":
+					pass ##TODO simple and bidirectional graph
+				else:
+					headref = {"_id" : head["_id"]}
+                        		tailref = {"_id" : tail["_id"]}
+			
+				edge["head"]={headref,tailref}
+                                edge["tail"]=tailref
+	
 			self[self._ddbb][self._edge].insert(edge)
 			return edge
 		except:
@@ -423,10 +430,8 @@ class GraphMongo(MongoClient):
                                                 nodes = [node["_id"] for node in nodes]
 
 				if query is not None:
-					if query:
+					if nodes:
 						query = {"$and":[{"{0}._id".format(FROM) : {"$in" : nodes}},query]}
-	                                else:
-						query = {"$and":[{"{0}._id".format(FROM) : {"$in" : nodes}}]}
 					match = {"$match" : query}
                                         project = {"$project" : {"_id" : "${0}._id".format(TO)}}
                                         elems = self[self._ddbb][self._edge].aggregate([match,project])
@@ -440,7 +445,7 @@ class GraphMongo(MongoClient):
 			return {"status":"ko"}
 
 
-def CreateGraph():
+def CreateDirectedGraph():
 
 	##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
@@ -454,6 +459,7 @@ def CreateGraph():
         node1 = graph.AddNode(weight=1)
         node2 = graph.AddNode(weight=2)
         node4 = graph.AddNode(weight=4)
+        node9 = graph.AddNode(weight=9)
 	
 	##create edges
         edge65 = graph.AddEdge(head=node6,tail=node2, weight=9)
@@ -482,7 +488,43 @@ def CreateGraph():
         
 	edge45 = graph.AddEdge(head=node4,tail=node5, weight=6)
         edge54 = graph.AddEdge(head=node5,tail=node4, weight=6)
-        
+       
+
+def CreateSimpleGraph():
+
+        ##create instance for graphAPI for mongodb
+        graph = GraphMongo('localhost', 27018)
+        ##remove all previous data, nodes and edges
+        graph.Clear()
+
+        ##create nodes
+        node6 = graph.AddNode(weight=6)
+        node5 = graph.AddNode(weight=5)
+        node3 = graph.AddNode(weight=3)
+        node1 = graph.AddNode(weight=1)
+        node2 = graph.AddNode(weight=2)
+        node4 = graph.AddNode(weight=4)
+        node9 = graph.AddNode(weight=9)
+
+        ##create edges
+        edge65 = graph.AddEdge(head=node6,tail=node2, weight=9, type="simple")
+
+        edge61 = graph.AddEdge(head=node6,tail=node1, weight=14, type="simple")
+
+        edge63 = graph.AddEdge(head=node6,tail=node3, weight=2, type="simple")
+
+        edge13 = graph.AddEdge(head=node1,tail=node3, weight=9, type="simple")
+
+        edge12 = graph.AddEdge(head=node1,tail=node2, weight=7, type="simple")
+
+        edge23 = graph.AddEdge(head=node2,tail=node3, weight=10, type="simple")
+
+        edge24 = graph.AddEdge(head=node2,tail=node2, weight=15, type="simple")
+
+        edge34 = graph.AddEdge(head=node3,tail=node4, weight=11, type="simple")
+
+        edge45 = graph.AddEdge(head=node4,tail=node5, weight=6, type="simple")
+
 
 def Queries():
 	##create instance for graphAPI for mongodb
@@ -568,7 +610,7 @@ if __name__ == '__main__':
 
 	if args.create is not None and args.create == True:
 		print "creating new graph"
-		CreateGraph()
+		CreateSimpleGraph()
 	
 	if args.test is not None and args.test == True:
 		print "testing graph"
