@@ -14,6 +14,12 @@ Minimalist framework to work with directed graphs with mongo database and develo
 * Vertex and edges count
 * Vertex degree
 
+### Data model
+graph -> nodes,edges
+node -> id, label, weight, data
+edge -> id, label, weight, head, tail, type, data
+data -> json
+
 ### Installation
 + Dependencies: python 2.7, pymongo and mongodb
 + Download and use graphmongo.py
