@@ -24,13 +24,25 @@ class GraphMongo(MongoClient):
 	_node = "node"         ###collection name for nodes
 	_edge = "edge"         ###collection name for esges
 
-	def __init__(self, address="localhost", port=27017):
+	def __init__(self, address="localhost", port=27017, dbname=None):
 		''' 
         	@brief: init a connection with mongo ddbb
         	@param address: ip address where the database is located 
         	@param port: port where the database is listening
+		@param dbname: name for the graph database
 		'''
+		self.Configuration(dbname)
 		MongoClient.__init__(self,address,port)
+		
+
+	def Configuration(self, dbname):
+		'''
+		@brief: set parameters like name of the database 
+                @param dbname: name for the graph database
+		'''
+                if dbname is not None:
+                        self._ddbb = dbname
+
 
 	def Clear(self, nodes=True, edges=True):
 	        '''
@@ -482,7 +494,7 @@ class GraphMongo(MongoClient):
 def CreateDirectedGraph():
 
 	##create instance for graphAPI for mongodb
-        graph = GraphMongo('localhost', 27018)
+        graph = GraphMongo('localhost', 27018, dbname="graph")
 	##remove all previous data, nodes and edges 
         graph.Clear()
 
@@ -522,12 +534,14 @@ def CreateDirectedGraph():
         
 	edge45 = graph.AddEdge(head=node4,tail=node5, weight=6)
         edge54 = graph.AddEdge(head=node5,tail=node4, weight=6)
-       
+      
+	graph.close() 
 
 def CreateSimpleGraph():
 
         ##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
+	graph.Configuration(dbname="graph")
         ##remove all previous data, nodes and edges
         graph.Clear()
 
@@ -564,7 +578,7 @@ def Queries():
 	##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
 
-	print "QUERING"
+	print "##### GET NODES AND NEIGHTBOURS #####"
 	print "\nGet one node"
 	nodes = graph.GetNodes(weight=6)
 	print nodes
@@ -666,16 +680,19 @@ def Metrics():
 if __name__ == '__main__':
 
         parser = argparse.ArgumentParser(description="Testing GraphMongo API")
-        parser.add_argument("-c","--create",type=bool,required=False)
-        parser.add_argument("-t","--test",type=bool,required=False)
+        parser.add_argument("-c","--create",required=False)
+        parser.add_argument("-t","--test",required=False, help="test options values [m,q] -> ex: mq")
         args=parser.parse_args()
 
-	if args.create is not None and args.create == True:
-		print "creating new graph"
+	if args.create is not None and args.create == 'True':
+		print "******************************** CREATING GRAPH ********************************"
 		CreateDirectedGraph()
+
+        if args.test is not None and "m" in args.test:
+                print "\n************************* TESTING METRICS AND MEASURES **************************"
+                Metrics()
 	
-	if args.test is not None and args.test == True:
-		print "testing graph"
-		#Queries()
-		Metrics()
+	if args.test is not None and "q" in args.test:
+		print "\n******************************** TESTING QUERIES ********************************"
+		Queries()
 	
