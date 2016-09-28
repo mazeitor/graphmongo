@@ -3,11 +3,11 @@ Minimalist framework to work with directed graphs with mongo database and develo
 
 ### Features
 * Create and remove graph
-* Update vertex and edges
-* Remove vertex and edges
-* Filter and Fetch vertex
+* Create, update and remove vertex and edges
+* Filter vertex and edges using mongodb query language
+* Fetch vertex
 * Use paging, sort and selects
-* Get input/output neighbours
+* Get head and tail neighbours
 * Deal with multiple graph at the same time
 
 #### Measures and metrics
