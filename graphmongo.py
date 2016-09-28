@@ -407,6 +407,10 @@ class GraphMongo(MongoClient, set):
                 if nodes is None and edges is not None:
                         elems += self.__GetNodeNeighbours(edges=edges, direction=direction)
 		else:
+			if isinstance(nodes,GraphMongo):
+				nodes=list(set(nodes))
+			if isinstance(nodes,set):
+				nodes=list(nodes)
 			elems = self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction=direction)
                 
 		aux = self.CopyObject() ### pipeline method
@@ -523,10 +527,21 @@ class GraphMongo(MongoClient, set):
 		@param nodes: list of nodes
 		@return: dictionary with the nodeid and its degree
 		'''
+		###pipeline method
 		elems={}
+
+                if nodes is None and set(self) is not None and len(self)>0:
+                        nodes = list(set(self))
+
 		if nodes is None:
 			nodes = []	
 			nodes = self.GetNodes()
+
+                if nodes:
+                        if isinstance(nodes,GraphMongo):
+                                nodes=list(set(nodes))
+                        if isinstance(nodes,set):
+                                nodes=list(nodes)
 	
 		for node in nodes:
 		        outdegree = self.__GetNodeNeighbours(nodes=[node],direction="tail")
@@ -691,8 +706,8 @@ def Queries():
 	print fetched
 
 	print "\nGet nodes given list of nodes and list of edges"
-	nodes = graph.GetNeighbours(nodes=nodes, edges=edges)
-	print nodes
+	doc = graph.GetNeighbours(nodes=nodes, edges=edges)
+	print doc
 
 def Metrics():
 
@@ -714,7 +729,7 @@ def Metrics():
 	print vd
 	nodes = graph.GetNodes()
 	print "\nVertex degree for a node"
-	vd = graph.VertexDegree(nodes=[nodes[0]])
+	vd = graph.VertexDegree(nodes=[list(set(nodes))[0]])
 	print vd
 	print "\nVertex degree for a list of nodes"
 	vd = graph.VertexDegree(nodes=nodes)
