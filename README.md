@@ -94,7 +94,7 @@ fetched = graph.Fetch(elems=nodes)
 ```
 
 #### TODO
-* Implement different metrics and measures like distances, connectivity, centrality, reciprocity and transitivity and homophily, assortative mixing and similarity  
+* Implement different metrics and measures like 'distances', 'connectivity', 'centrality', 'reciprocity and transitivity' and 'homophily, assortative mixing and similarity'  
 * Implement use cases like link prediction  
 * Convert the functions for grasping nodes like GetNodes and GetNeighbours as pipeline. Change list as input/output structure to GraphMongo.   
 ex: 
