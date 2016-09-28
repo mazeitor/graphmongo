@@ -15,9 +15,9 @@ Minimalist framework to work with directed graphs using mongo database and pytho
 * Vertex degree
 
 ### Data model
-graph -> nodes,edges
-node -> id, label, weight, data
-edge -> id, label, weight, head, tail, type, data
+graph -> nodes,edges  
+node -> id, label, weight, data  
+edge -> id, label, weight, head, tail, type, data  
 data -> json
 
 ### Installation
