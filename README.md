@@ -1,5 +1,5 @@
 ## GraphMongo: graph framework for mongodb
-Minimalist framework to work with directed graphs with mongo database and developted in python.
+Minimalist framework to work with directed graphs using mongo database and python language programming.
 
 ### Features
 * Create and remove graph
