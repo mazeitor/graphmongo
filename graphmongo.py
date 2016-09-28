@@ -12,7 +12,7 @@ import argparse
 Created on 01 July 2016
 @author: oriol mazariegos
 '''
-class GraphMongo(MongoClient):
+class GraphMongo(MongoClient, set):
 	'''
 	Graph class for mongodb database
 	'''
@@ -24,37 +24,57 @@ class GraphMongo(MongoClient):
 	_node = "node"         ###collection name for nodes
 	_edge = "edge"         ###collection name for esges
 
-	def __init__(self, address="localhost", port=27017, dbname=None):
+	def __init__(self, address="localhost", port=27017, dbname="graph", results=set([])):
 		''' 
         	@brief: init a connection with mongo ddbb
         	@param address: ip address where the database is located 
         	@param port: port where the database is listening
 		@param dbname: name for the graph database
+                @param results: list of ObjectId to initialize the instance with previous queries 
 		'''
-		self.Configuration(dbname)
-		MongoClient.__init__(self,address,port)
+		self.SetParameters(address,port,dbname,results)
+		super(GraphMongo,self).__init__(self.address,self.port)
 		
 
-	def Configuration(self, dbname):
+	def CopyObject(self):
+		'''
+		@brief: copy full object
+		@return: GraphMongo element
+		'''
+		graph = GraphMongo(self.address, self.port, self._ddbb, set(self)) 
+		return graph
+
+        def ClearGraph(self, nodes=True, edges=True):
+                '''
+                @brief: remove all nodes and edges of the ddbb taking account the params
+                @param nodes: option to delete all nodes
+                @param edges: option to delete all edges
+                '''
+                if nodes:
+                        self[self._ddbb][self._node].remove()
+                if edges:
+                        self[self._ddbb][self._edge].remove()
+
+
+	def SetParameters(self, address=None, port=None, dbname=None, results=None):
 		'''
 		@brief: set parameters like name of the database 
+                @param address: ip address where the database is located
+                @param port: port where the database is listening
                 @param dbname: name for the graph database
+                @param results: list of ObjectId to initialize the instance with previous queries
 		'''
+		if address is not None:
+			self.address = address
+		if port is not None:
+			self.port = port
+		if address is not None or port is not None:
+			MongoClient.__init__(self,self.address,self.port)
                 if dbname is not None:
                         self._ddbb = dbname
-
-
-	def Clear(self, nodes=True, edges=True):
-	        '''
-                @brief: remove all nodes and edges of the ddbb taking account the params
-             
-		@param nodes: option to delete all nodes
-		@param edges: option to delete all edges
-                '''
-		if nodes:
-			self[self._ddbb][self._node].remove()
-		if edges:
-			self[self._ddbb][self._edge].remove()
+		if results is not None:
+			self.clear()
+			self.update(results)
 
 
 	def AddNode(self,node=None, label=None, weight=None, data=None):
@@ -250,10 +270,17 @@ class GraphMongo(MongoClient):
                 @param paging: page and per_page, start index page and the number of entries shown per page
                 @return: list of fetched nodes, otherwise an error is returned as dictionary with status ko
                 '''
-
+		
 		try:
+			
                         query = {}
                         ids = []
+
+			if elems is None: ###pipeline method
+				elems = list(set(self))
+			elif elems is not None and isinstance(elems,set):
+				elems = list(elems)
+
                         ids = elems
                         if len(ids) > 0:
                                 query["_id"]={}
@@ -344,7 +371,7 @@ class GraphMongo(MongoClient):
                 @return: list of nodes, otherwise an error is returned as dictionary with status ko
                 '''
 		try:
-			elems=[]
+			#elems=[]
 			if label is not None:
 				if query is None:
 					query = {}
@@ -354,7 +381,11 @@ class GraphMongo(MongoClient):
 				if query is None:
 					query = {}
 				query.update({"weight" : weight})
-			return self.__Get(type="node", query=query)
+			#return self.__Get(type="node", query=query)
+                        
+			aux = self.CopyObject() ###pipeline method
+			aux.SetParameters(results=set(self.__Get(type="node", query=query)))
+			return aux
 		except:
 	                return {"status":"ko"}
 
@@ -371,11 +402,16 @@ class GraphMongo(MongoClient):
                 @return: list of nodes, otherwise an error is returned as dictionary with status ko
                 '''
                 elems=[]
+		if nodes is None and set(self) is not None and len(self)>0:
+			nodes = list(set(self))
                 if nodes is None and edges is not None:
                         elems += self.__GetNodeNeighbours(edges=edges, direction=direction)
 		else:
 			elems = self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction=direction)
-                return elems
+                
+		aux = self.CopyObject() ### pipeline method
+                aux.SetParameters(results=set(elems))
+		return aux
 
 
         def __GetNodeNeighbours(self, nodes=None, edges=None, label=None, weight=None, query=None, direction=None):
@@ -456,6 +492,15 @@ class GraphMongo(MongoClient):
 		except:
 			return {"status":"ko"}
 
+
+	def pipeline(self):
+		items = set(self)
+		self |= items | set(["2"]) 
+	
+		aux = self.CopyObject()
+		aux.SetParameters(results=set([]))	
+		return aux
+
 	####### measures and metrics
 	def VertexCount(self):
 		'''
@@ -496,7 +541,7 @@ def CreateDirectedGraph():
 	##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018, dbname="graph")
 	##remove all previous data, nodes and edges 
-        graph.Clear()
+        graph.ClearGraph()
 
 	##create nodes
         node6 = graph.AddNode(weight=6)
@@ -541,9 +586,9 @@ def CreateSimpleGraph():
 
         ##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
-	graph.Configuration(dbname="graph")
+	graph.SetParameters(dbname="graph")
         ##remove all previous data, nodes and edges
-        graph.Clear()
+        graph.ClearGraph()
 
         ##create nodes
         node6 = graph.AddNode(weight=6)
@@ -592,7 +637,7 @@ def Queries():
 	print nodes
 
         print "\nFetch nodes from a list"
-        fetched = graph.Fetch(elems=nodes)
+        fetched = graph.Fetch(elems=set(nodes))
         print fetched
 	
         print "\nget related nodes by nodes"
@@ -696,3 +741,8 @@ if __name__ == '__main__':
 		print "\n******************************** TESTING QUERIES ********************************"
 		Queries()
 	
+	if args.test is not None and "p" in args.test:
+		print "\n******************************** TESTING PIPELINE ********************************"
+		graph = GraphMongo(address='localhost', port=27018)
+		elems = graph.GetNodes().GetNeighbours().Fetch()
+		print elems	
