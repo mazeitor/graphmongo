@@ -15,7 +15,7 @@ Minimalist framework to work with directed graphs using mongo database and pytho
 * Vertex degree
 
 ### Data model
-graph -> nodes,edges  
+graph -> nodes, edges  
 node -> id, label, weight, data  
 edge -> id, label, weight, head, tail, type, data  
 data -> json
@@ -97,7 +97,7 @@ fetched = graph.Fetch(elems=nodes)
 * Implement different metrics and measures like 'distances', 'connectivity', 'centrality', 'reciprocity and transitivity' and 'homophily, assortative mixing and similarity'  
 * Implement use cases like link prediction  
 * Convert the functions for grasping nodes like GetNodes and GetNeighbours as pipeline. Change list structure as input/output to GraphMongo.   
-ex: 
+ 
 ```python
 ###get all nodes and fetch them
 nodelist = graph.GetNodes()   
