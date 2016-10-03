@@ -119,15 +119,4 @@ fetched = graph.Fetch(elems=nodes)
 
 #### TODO
 * Implement different metrics and measures like 'distances', 'connectivity', 'centrality', 'reciprocity and transitivity' and 'homophily, assortative mixing and similarity'  
-* Implement use cases like link prediction  
- 
- 
-```python
-###get all nodes and fetch them
-nodelist = graph.GetNodes()   
-fetchednodelist = graph.Fetch(nodelist)  
-```
-```python
-###get all nodes and fetch them
-fetchednodelist = graph.GetNodes().Fetch()  
-```
+* Implement use cases like Dijkstra or link prediction  
