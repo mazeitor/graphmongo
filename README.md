@@ -53,6 +53,30 @@ fetchednode1 = graph.Fetch(elems=node1)
 fetchednodes = graph.Fetch(elems=relatednodes)
 ```
 
+####Pipeline methods
+Graphmongo allow work with pipeline methods like GetNodes, GetNeighbours and Fetch to grasp nodes from database. One of the input are the nodes collection which could be treat as a parameter of the functiona or pipe from previous call. This feature give us more flexivility, reuse results and maintaing the different stage between calls.   
+
+Get all nodes and fetch them
+```python
+nodelist = graph.GetNodes()   
+fetchednodelist = graph.Fetch(nodelist)  
+###using pipeline
+fetchednodelist = graph.GetNodes().Fetch()
+```
+Get neighbour of nodes with label 6
+```python
+nodes = graph.GetNodes(label=6).GetNeighbours()
+```
+Using *disjunction* option to get desired related nodes. GetNeighbour method grasp all related nodes given as an input a collection of nodes. Sometimes, we would like other kind of answers like, related nodes are not linked with the input nodes (for instance a link between input nodes) or nodes in previous queries. We can achieve that with [Set](https://docs.python.org/2/library/sets.html) operators but When we are using the pipe feature we lose this possibility so we have added this options to allow configure our desired query. Disjunction is a list that can take "nodes" or "accumulated" option. 
+```python
+###get related nodes of related nodes of nodes with label 6
+nodes = graph.GetNodes(label=6)
+nodes = nodes.GetNeighbours()-nodes
+
+###get related nodes of related nodes of nodes with label 6 minus related nodes of nodes with label 6
+nodes = graph.GetNodes(label=6).GetNeighbours(disjunction=["nodes""])
+```
+
 ### Examples
 #### Create a basic directed graph
 ```python
@@ -96,7 +120,7 @@ fetched = graph.Fetch(elems=nodes)
 #### TODO
 * Implement different metrics and measures like 'distances', 'connectivity', 'centrality', 'reciprocity and transitivity' and 'homophily, assortative mixing and similarity'  
 * Implement use cases like link prediction  
-* Convert the functions for grasping nodes like GetNodes and GetNeighbours as pipeline. Change list structure as input/output to GraphMongo.   
+ 
  
 ```python
 ###get all nodes and fetch them
