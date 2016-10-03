@@ -74,7 +74,7 @@ nodes = graph.GetNodes(label=6)
 nodes = nodes.GetNeighbours()-nodes
 
 ###get related nodes of related nodes of nodes with label 6 minus related nodes of nodes with label 6
-nodes = graph.GetNodes(label=6).GetNeighbours(disjunction=["nodes""])
+nodes = graph.GetNodes(label=6).GetNeighbours(disjunction=["nodes"])
 ```
 
 ### Examples
