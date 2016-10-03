@@ -67,7 +67,7 @@ Get neighbour of nodes with label 6
 ```python
 nodes = graph.GetNodes(label=6).GetNeighbours()
 ```
-Using *disjunction* option to get desired related nodes. GetNeighbour method grasp all related nodes given as an input a collection of nodes. Sometimes, we would like other kind of answers like, related nodes are not linked with the input nodes (for instance a link between input nodes) or nodes in previous queries. We can achieve that with [Set](https://docs.python.org/2/library/sets.html) operators but When we are using the pipe feature we lose this possibility so we have added this options to allow configure our desired query. Disjunction is a list that can take "nodes" or "accumulated" option. 
+Using **disjunction** option to get desired related nodes. GetNeighbour method grasp all related nodes given as an input a collection of nodes. Sometimes, we would like other kind of answers like, related nodes are not linked with the input nodes (for instance a link between input nodes) or nodes in previous queries. We can achieve that with [Set](https://docs.python.org/2/library/sets.html) operators but When we are using the pipe feature we lose this possibility so we have added this options to allow configure our desired query. Disjunction is a list that can take "nodes" or "accumulated" option. 
 ```python
 ###get related nodes of related nodes of nodes with label 6
 nodes = graph.GetNodes(label=6)
