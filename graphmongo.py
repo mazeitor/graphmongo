@@ -760,7 +760,6 @@ def Queries():
 	doc = nodes.GetNeighbours(edges=edges)
 	print set(doc)
 
-	##hola	
 	nodes = graph.GetNodes(weight=6)
 	print set(nodes)
 	nodes1 = nodes.GetNeighbours()
