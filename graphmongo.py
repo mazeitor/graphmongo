@@ -409,7 +409,7 @@ class GraphMongo(MongoClient, set):
 	                return {"status":"ko"}
 
 
-	def GetNeighbours(self, nodes=None, edges=None, label=None, weight=None, direction=None, query=None, disjunction=True):
+	def GetNeighbours(self, nodes=None, edges=None, label=None, weight=None, direction=None, query=None, disjunction=None):
                 '''
                 @brief: get list of related nodes given nodes or related nodes with edges
                 @param nodes: list of ObjectId's of nodes
@@ -440,10 +440,15 @@ class GraphMongo(MongoClient, set):
 			elems = self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction=direction)
               
 
-		if disjunction == True: 
-			elems = set(elems) - set(self._accumulatedresults) - set(nodes)
-		else:
-			elems = set(elems) - set(nodes)
+		#if disjunction is None or ("nodes","accumulated") not in disjunction: 
+		elems = set(elems) 
+	
+		if disjunction is None:
+			disjunction = list()	
+		if "nodes" in disjunction:
+			elems = elems - set(nodes)
+		if "accumulated" in disjunction:
+			elems = elems - set(self._accumulatedresults)
 
 		aux = self.CopyObject() ### pipeline method
 		aux.SetParameters(results=elems)
@@ -699,11 +704,11 @@ def Queries():
 
         print "\nget related nodes + related nodes of related nodes"
         relatednodes = nodes.GetNeighbours()
-	relatednodes = relatednodes.GetNeighbours(disjunction=False) ###add disjunction, remove previous nodes
+	relatednodes = relatednodes.GetNeighbours(disjunction=["node"]) ###add disjunction, remove previous nodes
 	print set(relatednodes)
 
 	print "\nget nodes + related nodes + related nodes of related nodes"
-        relatednodes = nodes.GetNeighbours(disjunction=False).GetNeighbours() ###add disjunction, remove previous nodes
+        relatednodes = nodes.GetNeighbours(disjunction=["node"]).GetNeighbours() ###add disjunction, remove previous nodes
         print relatednodes.Fetch()
 
 	print "\nget related nodes given a list of nodes and the weight of the edges"
@@ -754,6 +759,14 @@ def Queries():
 	print "\nGet nodes given list of nodes and list of edges"
 	doc = nodes.GetNeighbours(edges=edges)
 	print set(doc)
+
+	##hola	
+	nodes = graph.GetNodes(weight=6)
+	print set(nodes)
+	nodes1 = nodes.GetNeighbours()
+	print set(nodes1)
+	nodes1 = nodes.GetNeighbours(disjunction=["nodes","accumulated"])
+        print set(nodes1)
 
 def Metrics():
 
