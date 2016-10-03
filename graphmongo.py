@@ -12,7 +12,7 @@ import argparse
 Created on 01 July 2016
 @author: oriol mazariegos
 '''
-class GraphMongo(MongoClient):
+class GraphMongo(MongoClient, set):
 	'''
 	Graph class for mongodb database
 	'''
@@ -24,37 +24,75 @@ class GraphMongo(MongoClient):
 	_node = "node"         ###collection name for nodes
 	_edge = "edge"         ###collection name for esges
 
-	def __init__(self, address="localhost", port=27017, dbname=None):
+	_accumulatedresults = set([]) ###store accumulation of old query results
+
+	def __init__(self, address="localhost", port=27017, dbname="graph", results=set([])):
 		''' 
         	@brief: init a connection with mongo ddbb
         	@param address: ip address where the database is located 
         	@param port: port where the database is listening
 		@param dbname: name for the graph database
+                @param results: list of ObjectId to initialize the instance with previous queries 
 		'''
-		self.Configuration(dbname)
-		MongoClient.__init__(self,address,port)
+		self.SetParameters(address,port,dbname,results)
+		super(GraphMongo,self).__init__(self.address,self.port)
 		
 
-	def Configuration(self, dbname):
+	def CopyObject(self):
 		'''
-		@brief: set parameters like name of the database 
+		@brief: copy full object
+		@return: GraphMongo element
+		'''
+		graph = GraphMongo(self.address, self.port, self._ddbb, set(self)) 
+		graph._accumulatedresults = self._accumulatedresults	
+		return graph
+
+
+	def SetParameters(self, address=None, port=None, dbname=None, results=None):
+		'''
+		@brief: set parameters like address and port of the mongo instance, name of the database and results of previous query
+                @param address: ip address where the database is located
+                @param port: port where the database is listening
                 @param dbname: name for the graph database
+                @param results: list of ObjectId to initialize the instance with previous queries
 		'''
+		if address is not None:
+			self.address = address
+		if port is not None:
+			self.port = port
+		if address is not None or port is not None:
+			MongoClient.__init__(self,self.address,self.port)
                 if dbname is not None:
                         self._ddbb = dbname
+		if results is not None:
+			self.clear()
+			self.update(results)
 
 
-	def Clear(self, nodes=True, edges=True):
-	        '''
-                @brief: remove all nodes and edges of the ddbb taking account the params
-             
-		@param nodes: option to delete all nodes
-		@param edges: option to delete all edges
+	def Reset(self):
+		'''
+		@brief: remove current and accumulated results come from previous queries
+		@return: graphmongo object
+		'''
+		##remove current values
+		self.clear()
+		##remove accumulated values
+		self._accumulatedresults.clear()
+		
+		aux = self.CopyObject() ###pipeline method
+		return aux
+
+        
+	def ClearGraph(self, nodes=True, edges=True):
                 '''
-		if nodes:
-			self[self._ddbb][self._node].remove()
-		if edges:
-			self[self._ddbb][self._edge].remove()
+                @brief: remove all nodes and edges of the ddbb taking account the params
+                @param nodes: option to delete all nodes
+                @param edges: option to delete all edges
+                '''
+                if nodes:
+                        self[self._ddbb][self._node].remove()
+                if edges:
+                        self[self._ddbb][self._edge].remove()
 
 
 	def AddNode(self,node=None, label=None, weight=None, data=None):
@@ -74,7 +112,6 @@ class GraphMongo(MongoClient):
 			if node["_id"] is None:
 				node["_id"]=ObjectId()
 
-			##if label is not None or "label" not in edge.keys() or edge["label"] is None:
 			if label is not None:
 				node["label"]=label
 
@@ -250,10 +287,15 @@ class GraphMongo(MongoClient):
                 @param paging: page and per_page, start index page and the number of entries shown per page
                 @return: list of fetched nodes, otherwise an error is returned as dictionary with status ko
                 '''
-
 		try:
                         query = {}
                         ids = []
+
+			if elems is None: ###pipeline method
+				elems = list(set(self))
+			elif elems is not None and isinstance(elems,set):
+				elems = list(elems)
+
                         ids = elems
                         if len(ids) > 0:
                                 query["_id"]={}
@@ -302,7 +344,7 @@ class GraphMongo(MongoClient):
 			else:
 				projection = {"_id":1}
 				elems = self[self._ddbb][type].find(query,projection)
-		
+
 			ids = [elem["_id"] for elem in elems]
                         return list(set(ids))
 		except:
@@ -341,10 +383,9 @@ class GraphMongo(MongoClient):
                 @param label: label of the node or relation
                 @param weight: weight of the node or relation
                 @param query: mongodb expression query applyed in the ddbb
-                @return: list of nodes, otherwise an error is returned as dictionary with status ko
+                @return: graphmongo instance with list of nodes, otherwise an error is returned as dictionary with status ko
                 '''
 		try:
-			elems=[]
 			if label is not None:
 				if query is None:
 					query = {}
@@ -354,12 +395,21 @@ class GraphMongo(MongoClient):
 				if query is None:
 					query = {}
 				query.update({"weight" : weight})
-			return self.__Get(type="node", query=query)
+                        
+			##reset values as a first endpoint 
+			self.Reset() 
+			
+			elems = set(self.__Get(type="node", query=query))
+
+			##defining pipeline method output
+			aux = self.CopyObject() 
+			aux.SetParameters(results=elems)
+			return aux
 		except:
 	                return {"status":"ko"}
 
 
-	def GetNeighbours(self, nodes=None, edges=None, label=None, weight=None, direction=None, query=None):
+	def GetNeighbours(self, nodes=None, edges=None, label=None, weight=None, direction=None, query=None, disjunction=True):
                 '''
                 @brief: get list of related nodes given nodes or related nodes with edges
                 @param nodes: list of ObjectId's of nodes
@@ -368,14 +418,37 @@ class GraphMongo(MongoClient):
                 @param weight: weight of the node or relation
                 @param direction: direction of the relation, "head|tail"
                 @param query: mongodb expression query applyed in the ddbb
-                @return: list of nodes, otherwise an error is returned as dictionary with status ko
+		@param disjunction: option to delete in the result the previous queries
+                @return: graphmongo instance with list of nodes, otherwise an error is returned as dictionary with status ko
                 '''
                 elems=[]
-                if nodes is None and edges is not None:
+
+		#param manager for pipeline method
+		if nodes is None:
+			if set(self) is not None and len(self)>0:
+				nodes = list(set(self))
+              		elif edges is None:
+				nodes = list()
+		if nodes is None and edges is not None:
+			nodes = list()
                         elems += self.__GetNodeNeighbours(edges=edges, direction=direction)
 		else:
+			if isinstance(nodes,GraphMongo):
+				nodes=list(set(nodes))
+			elif isinstance(nodes,set):
+				nodes=list(nodes)
 			elems = self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction=direction)
-                return elems
+              
+
+		if disjunction == True: 
+			elems = set(elems) - set(self._accumulatedresults) - set(nodes)
+		else:
+			elems = set(elems) - set(nodes)
+
+		aux = self.CopyObject() ### pipeline method
+		aux.SetParameters(results=elems)
+                aux._accumulatedresults = aux._accumulatedresults | set(nodes) 
+		return aux
 
 
         def __GetNodeNeighbours(self, nodes=None, edges=None, label=None, weight=None, query=None, direction=None):
@@ -395,7 +468,6 @@ class GraphMongo(MongoClient):
 		###direction have tail be "head" or "tail" depending if we want tail retrieve head or tail
 		if direction is not None and direction not in ["head","tail"]:
 			return {"status":"ko"}
-
 		try:
 			if direction is None:
 				FROM = "head"	
@@ -478,11 +550,23 @@ class GraphMongo(MongoClient):
 		@param nodes: list of nodes
 		@return: dictionary with the nodeid and its degree
 		'''
+		###pipeline method
 		elems={}
+
+		##param manager
+                if nodes is None and set(self) is not None and len(self)>0:
+                        nodes = list(set(self))
+
 		if nodes is None:
-			nodes = []	
+			nodes = list()	
 			nodes = self.GetNodes()
-	
+
+                if nodes:
+                        if isinstance(nodes,GraphMongo):
+                                nodes=list(set(nodes))
+                        elif isinstance(nodes,set):
+                                nodes=list(nodes)
+		
 		for node in nodes:
 		        outdegree = self.__GetNodeNeighbours(nodes=[node],direction="tail")
 	                indegree = self.__GetNodeNeighbours(nodes=[node],direction="head")
@@ -496,7 +580,7 @@ def CreateDirectedGraph():
 	##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018, dbname="graph")
 	##remove all previous data, nodes and edges 
-        graph.Clear()
+        graph.ClearGraph()
 
 	##create nodes
         node6 = graph.AddNode(weight=6)
@@ -541,9 +625,9 @@ def CreateSimpleGraph():
 
         ##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
-	graph.Configuration(dbname="graph")
+	graph.SetParameters(dbname="graph")
         ##remove all previous data, nodes and edges
-        graph.Clear()
+        graph.ClearGraph()
 
         ##create nodes
         node6 = graph.AddNode(weight=6)
@@ -575,54 +659,76 @@ def CreateSimpleGraph():
 
 
 def Queries():
+	import pdb
 	##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
 
 	print "##### GET NODES AND NEIGHTBOURS #####"
 	print "\nGet one node"
 	nodes = graph.GetNodes(weight=6)
-	print nodes
+	print set(nodes)
 
 	print "\nGet all nodes"
         nodes = graph.GetNodes()
-        print nodes
+        print set(nodes)
 
 	print "\nGet nodes by quering"
 	nodes = graph.GetNodes(query={"weight":{"$in":[5,6]}})
-	print nodes
+	print set(nodes)
 
         print "\nFetch nodes from a list"
-        fetched = graph.Fetch(elems=nodes)
+        fetched = nodes.Fetch()
         print fetched
-	
+
         print "\nget related nodes by nodes"
 	print "\nget related nodes given a list of nodes"
-        docs = graph.GetNeighbours(nodes=nodes) 
-        print docs
+	nodes= graph.GetNodes(query={"weight":{"$in":[5,6]}})
+	relatednodes = nodes.GetNeighbours() 
+        print set(relatednodes)
+	relatednodes = nodes.GetNeighbours()
+        print set(relatednodes)
+	relatednodes = graph.GetNeighbours(nodes=nodes)
+        print set(relatednodes)
+	
+        print "\nget related nodes of related nodes"
+	relatednodes = nodes.GetNeighbours()
+	relatednodes = relatednodes.GetNeighbours() ###add disjunction, remove previous nodes
+	print set(relatednodes)
+	relatednodes = nodes.GetNeighbours().GetNeighbours()
+	print set(relatednodes)
+
+        print "\nget related nodes + related nodes of related nodes"
+        relatednodes = nodes.GetNeighbours()
+	relatednodes = relatednodes.GetNeighbours(disjunction=False) ###add disjunction, remove previous nodes
+	print set(relatednodes)
+
+	print "\nget nodes + related nodes + related nodes of related nodes"
+        relatednodes = nodes.GetNeighbours(disjunction=False).GetNeighbours() ###add disjunction, remove previous nodes
+        print relatednodes.Fetch()
 
 	print "\nget related nodes given a list of nodes and the weight of the edges"
-        docs = graph.GetNeighbours(nodes=nodes,weight=6)
-        print docs
+        docs = nodes.GetNeighbours(weight=6)
+        print set(docs)
 	print "\nget related nodes given a list of nodes and query for the weight of the edges"
-        docs = graph.GetNeighbours(nodes=nodes,query={"weight":{"$in":[2,14,6]}})
-        print docs
+        docs = nodes.GetNeighbours(query={"weight":{"$in":[2,14,6]}})
+        print set(docs)
 
 	print "\nget nodes FROM given a list of nodes and weight, in a directed graph"
-	docs = graph.GetNeighbours(nodes=nodes,weight=6,direction="head")
-        print docs
+	docs = nodes.GetNeighbours(weight=6,direction="head")
+        print set(docs)
         print "\nget nodes TO given a list of nodes and weight, in a directed graph"
-        docs = graph.GetNeighbours(nodes=nodes,weight=6,direction="tail")
-        print docs
+        docs = graph.GetNeighbours(weight=6,direction="tail")
+        print set(docs)
        
 	print "\nget nodes FROM given a weight, in a directed graph"	
 	docs = graph.GetNeighbours(weight=6,direction="head")
-        print docs
+        print set(docs)
         print "\nget nodes TO given a weight, in a directed graph"
         docs = graph.GetNeighbours(weight=6,direction="tail")
-        print docs
+        print set(docs)
 	print "\nget nodes FROM given a query by weight, in a directed graph"
         docs = graph.GetNeighbours(query={"weight":{"$in":[6,15]}},direction="head")
-        print docs
+        print set(docs)
 	
 	print "\nget edges by weight"
 	edges = graph.GetEdges(weight=6)
@@ -633,21 +739,21 @@ def Queries():
 
         print "\nget related nodes by edges"
         doc = graph.GetNeighbours(edges=edges)
-        print doc
+        print set(doc)
 	print "\nget nodes FROM by edges"
         doc = graph.GetNeighbours(edges=edges, direction="head")
-        print doc
+        print set(doc)
         print "\nget nodes TO by edges"
         doc = graph.GetNeighbours(edges=edges, direction="tail")
-        print doc
+        print set(doc)
 
 	print "\nFetch edges from a list"
 	fetched = graph.Fetch(elems=edges, type="edge")
 	print fetched
 
 	print "\nGet nodes given list of nodes and list of edges"
-	nodes = graph.GetNeighbours(nodes=nodes, edges=edges)
-	print nodes
+	doc = nodes.GetNeighbours(edges=edges)
+	print set(doc)
 
 def Metrics():
 
@@ -669,7 +775,7 @@ def Metrics():
 	print vd
 	nodes = graph.GetNodes()
 	print "\nVertex degree for a node"
-	vd = graph.VertexDegree(nodes=[nodes[0]])
+	vd = graph.VertexDegree(nodes=[list(set(nodes))[0]])
 	print vd
 	print "\nVertex degree for a list of nodes"
 	vd = graph.VertexDegree(nodes=nodes)
@@ -696,3 +802,8 @@ if __name__ == '__main__':
 		print "\n******************************** TESTING QUERIES ********************************"
 		Queries()
 	
+	if args.test is not None and "p" in args.test:
+		print "\n******************************** TESTING PIPELINE ********************************"
+		graph = GraphMongo(address='localhost', port=27018)
+		elems = graph.GetNodes().GetNeighbours().Fetch()
+		print elems	
