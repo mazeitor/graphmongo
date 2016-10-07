@@ -580,6 +580,48 @@ class GraphMongo(MongoClient, set):
 		return elems	
 
 
+	def GraphDistance(self, sources, targets=None):
+		'''
+		@brief: gives the distance from source vertes to target vertex
+		@param sources: list of ObjectId's of source nodes
+		@param targets: list of ObjectId's of target nodes		
+		@return: dictionary with relation of sources and targets. This relation is a list of intermediate ObjectId nodes and weights
+		'''
+		
+		if targets is None:
+			targets = self.GetNodes()
+
+		if sources:
+                        if isinstance(sources,GraphMongo):
+                                sources=list(set(sources))
+                        elif isinstance(sources,set):
+                                sources=list(sources)
+                if targets:
+                        if isinstance(targets,GraphMongo):
+                                targets=list(set(targets))
+                        elif isinstance(targets,set):
+                                targets=list(targets)
+
+		elems={}
+		for source in sources:
+			elems[source] = {}
+			for target in targets:	
+				distance = self.__GraphDistance(source=source, target=target)			
+				elems[source][target] = distance
+		return elems
+
+
+	def __GraphDistance(self, source, target=None):	
+                '''
+                @brief: gives the distance from source vertes to target vertex
+                @param source: ObjectId of source node
+                @param target: ObjectId of target node
+                @return: dictionary with relation of source and target. This relation is a list of intermediate ObjectId nodes and weights
+                '''
+		return {"distance":0,"path":set([])}
+
+
+
 def CreateDirectedGraph():
 
 	##create instance for graphAPI for mongodb
@@ -794,6 +836,9 @@ def Metrics():
 	vd = graph.VertexDegree(nodes=nodes)
 	print vd
 
+	print "\nGraph distances"
+	vd = graph.GraphDistance(sources=nodes,targets=nodes)
+	print vd
 
 
 if __name__ == '__main__':
