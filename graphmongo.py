@@ -1,4 +1,4 @@
-###import pymongo api
+
 import pymongo
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -6,6 +6,9 @@ import random
 import math
 import time
 import argparse
+import heapq
+import pdb
+import Queue
 
 
 '''
@@ -47,7 +50,7 @@ class GraphMongo(MongoClient, set):
 		graph._accumulatedresults = self._accumulatedresults	
 		return graph
 
-
+	
 	def SetParameters(self, address=None, port=None, dbname=None, results=None):
 		'''
 		@brief: set parameters like address and port of the mongo instance, name of the database and results of previous query
@@ -351,7 +354,7 @@ class GraphMongo(MongoClient, set):
 			return {"status":"ko"}
 
 
-	def GetEdges(self, edges=None, label=None, weight=None, direction=None, query=None):
+	def GetEdges(self, edges=None, head=None, tail=None, label=None, weight=None, direction=None, query=None):
 		'''
                 @brief: get list of edges given id's, label or quering
                 @param edges: list of edges
@@ -363,15 +366,32 @@ class GraphMongo(MongoClient, set):
 		'''
                 try:
                         elems=[]
+			if query is None:
+                        	query = {}
+
                         if label is not None:
-                                if query is None:
-                                        query = {}
                                 query.update({"label" : label})
 
                         if weight is not None:
-                                if query is None:
-                                        query = {}
-                                query.update({"weight" : weight})
+                                query.update({"weight" : weight})	
+			
+                        if head is not None:
+				if isinstance(head,set):
+					head=list(head)
+	                        elif isinstance(head,GraphMongo):
+	                                head=list(set(head))
+                                elif not isinstance(head,list):
+					head=[head]
+				query.update({"head._id" : {"$in" : head}})
+			if tail is not None:
+                                if isinstance(tail,set):
+                                        tail=list(tail)
+                                elif isinstance(tail,GraphMongo):
+                                        tail=list(set(tail))
+				elif not isinstance(tail,list):
+					tail=[tail]
+                                query.update({"tail._id" : {"$in" : tail}})
+
                         return self.__Get(elems=edges, type="edge", query=query)
                 except:
                         return {"status":"ko"}
@@ -533,7 +553,10 @@ class GraphMongo(MongoClient, set):
 		except:
 			return {"status":"ko"}
 
-	####### measures and metrics
+
+	##################################
+	###### MEASURES AND METRICS ######
+	##################################
 	def VertexCount(self):
 		'''
 		@brief: gives a count of the number of vertices in the graph
@@ -580,11 +603,15 @@ class GraphMongo(MongoClient, set):
 		return elems	
 
 
-	def GraphDistance(self, sources, targets=None):
+	################################
+	##### DISTANCES ALGORITHMS #####
+	################################
+	def GraphDistance(self, sources, targets=None, algorithm=None):
 		'''
 		@brief: gives the distance from source vertes to target vertex
 		@param sources: list of ObjectId's of source nodes
 		@param targets: list of ObjectId's of target nodes		
+		@param algorithm: function to be called as a parameter. the function have to follow the input/output like __GraphDistance(self, source, target=None) generic function
 		@return: dictionary with relation of sources and targets. This relation is a list of intermediate ObjectId nodes and weights
 		'''
 		
@@ -603,23 +630,131 @@ class GraphMongo(MongoClient, set):
                                 targets=list(targets)
 
 		elems={}
+		
 		for source in sources:
 			elems[source] = {}
-			for target in targets:	
-				distance = self.__GraphDistance(source=source, target=target)			
-				elems[source][target] = distance
+			if algorithm is None:
+				algorithm = self.BreadthFirstSearch
+			distance = algorithm(source=source, targets=targets)
+			elems[source] = distance
 		return elems
 
 
-	def __GraphDistance(self, source, target=None):	
+        def AStar(self, source, target=None):
                 '''
-                @brief: gives the distance from source vertes to target vertex
+                @brief: gives the distance and previous node from source vertex to target vertex, complexity=O(log h* (x))
                 @param source: ObjectId of source node
-                @param target: ObjectId of target node
-                @return: dictionary with relation of source and target. This relation is a list of intermediate ObjectId nodes and weights
+                @param target: list of ObjectId of target nodes
+                @return: dictionary with relation of source and targets. fist the tag "distance" give the distance from source to target and in the "from" the node where we have arrived to the current node
                 '''
-		return {"distance":0,"path":set([])}
 
+                return {"distance":0,"path":set([])}
+
+
+        def UniformCostSearch(self, source, target=None):
+                '''
+                @brief: gives the distance and previous node from source vertex to target vertex, complexity=O(b^(1 + C / epsilon))
+                @param source: ObjectId of source node
+                @param target: list of ObjectId of target nodes
+                @return: dictionary with relation of source and targets. fist the tag "distance" give the distance from source to target and in the "from" the node where we have arrived to the current node
+                '''
+                return {"distance":0,"path":set([])}
+
+
+
+	def BreadthFirstSearch(self, source, targets=None):
+                '''
+                @brief: gives the distance and previous node from source vertex to target vertex for unweighted graphs. complexity=O(|E|+|V|)
+                @param source: ObjectId of source node
+                @param target: list of ObjectId of target nodes
+                @return: dictionary with relation of source and targets. fist the tag "distance" give the distance from source to target and in the "from" the node where we have arrived to the current node
+                '''
+                ###initialization
+                prev = dict()
+                dist = dict()
+                seen = dict()
+                dist[source] = 0
+
+                ###create a vertex set Q
+                Q = []
+                heapq.heappush(Q,source)
+
+                while Q: ###main loop
+                        u = heapq.heappop(Q) ###remove and return best vertex
+                        seen[u] = True
+                        neighbours = self.GetNeighbours(nodes=[u])
+
+                        for v in set(neighbours):
+                                ###check if the node have been seen before
+                                if seen.has_key(v) and seen[v] == True: continue
+
+                                ###get distance between nodes
+				distance = 1
+
+                                alt = dist[u] + distance
+                                dist[v] = alt
+                                prev[v] = u
+                                heapq.heappush(Q,v)
+
+				###remove from targets, leave condition
+				if v in targets:
+					targets.remove(v)
+
+                return {"distance":dist,"from":prev}
+
+
+	def Dijkstra(self, source, targets=None):
+                '''
+                @brief: gives the distance and previous node from source vertex to target vertex for weighted graph. complexity=O((|E|+|V|) log |V|) = O(|E| log |V|) because we are using priority queue
+                @param source: ObjectId of source node
+                @param target: list of ObjectId of target nodes
+                @return: dictionary with relation of source and targets. fist the tag "distance" give the distance from source to target and in the "from" the node where we have arrived to the current node
+                '''
+		###initialization
+		prev = dict()
+		dist = dict()
+		seen = dict()
+		dist[source] = 0
+
+		###create a vertex set Q
+		Q = []	
+		heapq.heappush(Q,(source, dist[source]))
+		for target in targets:
+			if source != target:
+				dist[target] = float('inf')	###infinite
+				prev[target] = None		###undefined
+				seen[target] = False		###unseen
+				heapq.heappush(Q,(target, dist[target])) ### add target node to queue
+		
+		while Q: ###main loop
+			item = heapq.heappop(Q) ###remove and return best vertex
+			u = item[0]
+			seen[u] = True	
+			neighbours = self.GetNeighbours(nodes=[u])
+					
+			for v in set(neighbours):
+				###check if the node have been seen before
+				if seen.has_key(v) and seen[v] == True:	continue
+				
+				###check if the distance to new node is in the dist structure
+				if not dist.has_key(v):
+                                        dist[v] = float('inf')
+
+				###get distance between nodes
+				edges = self.GetEdges(head=u,tail=v)
+				edges = self.Fetch(edges, type="edge")
+				distance = float('inf')
+				for edge in edges:
+					if edge["weight"]<distance:
+						distance=edge["weight"]
+
+				alt = dist[u] + distance
+				if alt < dist[v]:
+					dist[v] = alt
+					prev[v] = u
+					heapq.heappush(Q,(v, dist[v]))
+		
+		return {"distance":dist,"from":prev}	
 
 
 def CreateDirectedGraph():
@@ -706,7 +841,6 @@ def CreateSimpleGraph():
 
 
 def Queries():
-	import pdb
 	##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
 
@@ -811,7 +945,6 @@ def Queries():
         print set(nodes1)
 
 def Metrics():
-
         ##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
 
@@ -836,9 +969,41 @@ def Metrics():
 	vd = graph.VertexDegree(nodes=nodes)
 	print vd
 
-	print "\nGraph distances"
-	vd = graph.GraphDistance(sources=nodes,targets=nodes)
-	print vd
+        print "\nGraph distances unweighted graph using BreadthFirstSearch"
+        source = graph.GetNodes(weight=6)
+        target = graph.GetNodes(weight=4)
+        vd = graph.GraphDistance(sources=source,targets=target)
+        source = list(set(source))
+        target = list(set(target))
+        distance = vd[source[0]]["distance"]
+        print "distance: between {0} and {1} is {2}".format(source[0],target[0],distance[target[0]])
+
+        print "shortest path"
+        path = vd[source[0]]["from"]
+        item = target[0]
+        while item != source[0]:
+                print "node: ",item,", with distance: ",distance[item]
+                item = path[item]
+        print "node: ",item,", with distance: ",distance[item]
+
+
+	print "\nGraph distances weighted grapg using Dijkstra"
+	source = graph.GetNodes(weight=6)
+	target = graph.GetNodes(weight=4)
+	vd = graph.GraphDistance(sources=source,targets=target,algorithm=graph.Dijkstra)
+	source = list(set(source))
+        target = list(set(target))
+	distance = vd[source[0]]["distance"]
+	print "distance: between {0} and {1} is {2}".format(source[0],target[0],distance[target[0]])
+
+	print "shortest path"
+	path = vd[source[0]]["from"]
+	item = target[0]
+	while item != source[0]:
+		print "node: ",item,", with distance: ",distance[item] 
+		item = path[item]
+	print "node: ",item,", with distance: ",distance[item]
+	
 
 
 if __name__ == '__main__':
