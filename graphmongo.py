@@ -18,14 +18,13 @@ class Utils():
 	'''
 	Utils class for check, validations and wrappers
 	'''
-
 	@classmethod
 	def wrapElem(self,elem):
 		'''
-		@brief: change elem input to list of ObjectId's
-		@param node: object with nodes
+		@brief: change elem type to list of ObjectId's
+		@param elem: object with elements
+		@return: list of ObjectId's 
 		'''
-
                	if isinstance(elem,GraphMongo):
                        	elem=list(set(elem))
                	elif isinstance(elem,set):
@@ -48,11 +47,10 @@ class GraphMongo(MongoClient, set):
 	_node = "node"         ###collection name for nodes
 	_edge = "edge"         ###collection name for esges
 
-	_accumulatednodes = set([]) ###adding nodes from previous queries
-	_accumulatededges = set([]) ###adding edges from previous queries
+	_accumulated = set([]) ###adding nodes from previous queries
 
 
-	def __init__(self, address="localhost", port=27017, dbname="graph", results=set([])):
+	def __init__(self, address="localhost", port=27017, dbname="graph", results=set([]), connection=True):
 		''' 
         	@brief: init a connection with mongo ddbb
         	@param address: ip address where the database is located 
@@ -61,43 +59,44 @@ class GraphMongo(MongoClient, set):
                 @param results: list of ObjectId to initialize the instance with previous queries 
 		'''
 		self.SetParameters(address,port,dbname,results)
-		super(GraphMongo,self).__init__(self.address,self.port)
+		if connection == True:
+			super(GraphMongo,self).__init__(self.address,self.port)
 		
 
-	def CopyObject(self):
-		'''
-		@brief: copy full object
-		@return: GraphMongo element
-		'''
-		graph = GraphMongo(self.address, self.port, self._ddbb, set(self)) 
-		graph._accumulatednodes = self._accumulatednodes	
-		graph._accumulatededges = self._accumulatededges	
-
-		return graph
-
-	
-	def SetParameters(self, address=None, port=None, dbname=None, results=None):
-		'''
-		@brief: set parameters like address and port of the mongo instance, name of the database and results of previous query
+        def SetParameters(self, address=None, port=None, dbname=None, results=None):
+                '''
+                @brief: set parameters like address and port of the mongo instance, name of the database and results of previous query
                 @param address: ip address where the database is located
                 @param port: port where the database is listening
                 @param dbname: name for the graph database
                 @param results: list of ObjectId to initialize the instance with previous queries
-		'''
-		if address is not None:
-			self.address = address
-		if port is not None:
-			self.port = port
-		if address is not None or port is not None:
-			MongoClient.__init__(self,self.address,self.port)
+                '''
+                if address is not None:
+                        self.address = address
+                if port is not None:
+                        self.port = port
+                if address is not None or port is not None:
+                        MongoClient.__init__(self,self.address,self.port)
                 if dbname is not None:
                         self._ddbb = dbname
-		if results is not None:
-			self.clear()
-			self.update(results)
+                if results is not None:
+                        self.clear()
+                        self.update(results)
 
 
-	def Reset(self):
+	def _CopyObject(self):
+		'''
+		@brief: copy full object
+		@return: GraphMongo element
+		'''
+		##don't need to open a new connection because was already opened
+		graph = GraphMongo(address=self.address, port=self.port, dbname=self._ddbb, results=set(self), connection=False) 
+		graph._accumulated = self._accumulated	
+
+		return graph
+
+	
+	def _Reset(self):
 		'''
 		@brief: remove current and accumulated results come from previous queries
 		@return: graphmongo object
@@ -105,10 +104,9 @@ class GraphMongo(MongoClient, set):
 		##remove current values
 		self.clear()
 		##remove accumulated values
-		self._accumulatednodes.clear()
-                self._accumulatededges.clear()
+		self._accumulated.clear()
 	
-		aux = self.CopyObject() ###pipeline method
+		aux = self._CopyObject() ###pipeline method
 		return aux
 
         
@@ -432,12 +430,12 @@ class GraphMongo(MongoClient, set):
 				query.update({"weight" : weight})
                         
 			##reset values as a first endpoint 
-			self.Reset() 
+			self._Reset() 
 			
 			elems = set(self.__Get(type="node", query=query))
 
 			##defining pipeline method output
-			aux = self.CopyObject() 
+			aux = self._CopyObject() 
 			aux.SetParameters(results=elems)
 			return aux
 		except:
@@ -480,11 +478,11 @@ class GraphMongo(MongoClient, set):
 		if "nodes" in disjunction:
 			elems = elems - set(nodes)
 		if "accumulated" in disjunction:
-			elems = elems - set(self._accumulatednodes)
+			elems = elems - set(self._accumulated)
 
-		aux = self.CopyObject() ### pipeline method
+		aux = self._CopyObject() ### pipeline method
 		aux.SetParameters(results=elems)
-                aux._accumulatednodes = aux._accumulatednodes | set(nodes) 
+                aux._accumulated = aux._accumulated | set(nodes) 
 		
 		return aux
 
@@ -836,6 +834,8 @@ def CreateSimpleGraph():
         edge34 = graph.AddEdge(head=node3,tail=node4, weight=11, type="simple")
         edge45 = graph.AddEdge(head=node4,tail=node5, weight=6, type="simple")
 
+	graph.close()
+
 
 def Queries():
 	##create instance for graphAPI for mongodb
@@ -941,6 +941,8 @@ def Queries():
 	nodes1 = nodes.GetNeighbours(disjunction=["nodes","accumulated"])
         print set(nodes1)
 
+	graph.close()
+
 def Metrics():
         ##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
@@ -1001,7 +1003,7 @@ def Metrics():
 		item = path[item]
 	print "node: ",item,", with distance: ",distance[item]
 	
-
+	graph.close()
 
 if __name__ == '__main__':
 
