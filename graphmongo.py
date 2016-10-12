@@ -1,4 +1,3 @@
-
 import pymongo
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -15,6 +14,28 @@ import Queue
 Created on 01 July 2016
 @author: oriol mazariegos
 '''
+class Utils():
+	'''
+	Utils class for check, validations and wrappers
+	'''
+
+	@classmethod
+	def wrapElem(self,elem):
+		'''
+		@brief: change elem input to list of ObjectId's
+		@param node: object with nodes
+		'''
+
+               	if isinstance(elem,GraphMongo):
+                       	elem=list(set(elem))
+               	elif isinstance(elem,set):
+                        elem=list(elem)
+		elif not isinstance(elem,list):
+                       	elem=[elem]
+
+      		return elem
+
+
 class GraphMongo(MongoClient, set):
 	'''
 	Graph class for mongodb database
@@ -27,7 +48,9 @@ class GraphMongo(MongoClient, set):
 	_node = "node"         ###collection name for nodes
 	_edge = "edge"         ###collection name for esges
 
-	_accumulatedresults = set([]) ###store accumulation of old query results
+	_accumulatednodes = set([]) ###adding nodes from previous queries
+	_accumulatededges = set([]) ###adding edges from previous queries
+
 
 	def __init__(self, address="localhost", port=27017, dbname="graph", results=set([])):
 		''' 
@@ -47,7 +70,9 @@ class GraphMongo(MongoClient, set):
 		@return: GraphMongo element
 		'''
 		graph = GraphMongo(self.address, self.port, self._ddbb, set(self)) 
-		graph._accumulatedresults = self._accumulatedresults	
+		graph._accumulatednodes = self._accumulatednodes	
+		graph._accumulatededges = self._accumulatededges	
+
 		return graph
 
 	
@@ -80,8 +105,9 @@ class GraphMongo(MongoClient, set):
 		##remove current values
 		self.clear()
 		##remove accumulated values
-		self._accumulatedresults.clear()
-		
+		self._accumulatednodes.clear()
+                self._accumulatededges.clear()
+	
 		aux = self.CopyObject() ###pipeline method
 		return aux
 
@@ -145,7 +171,6 @@ class GraphMongo(MongoClient, set):
 				edge = {}
 				edge["_id"]=None
 				
-
 			if edge["_id"] is None:
 				edge["_id"]=ObjectId()
 
@@ -376,21 +401,11 @@ class GraphMongo(MongoClient, set):
                                 query.update({"weight" : weight})	
 			
                         if head is not None:
-				if isinstance(head,set):
-					head=list(head)
-	                        elif isinstance(head,GraphMongo):
-	                                head=list(set(head))
-                                elif not isinstance(head,list):
-					head=[head]
+				head = Utils.wrapElem(head)
 				query.update({"head._id" : {"$in" : head}})
 			if tail is not None:
-                                if isinstance(tail,set):
-                                        tail=list(tail)
-                                elif isinstance(tail,GraphMongo):
-                                        tail=list(set(tail))
-				elif not isinstance(tail,list):
-					tail=[tail]
-                                query.update({"tail._id" : {"$in" : tail}})
+                                tail = Utils.wrapElem(tail)
+				query.update({"tail._id" : {"$in" : tail}})
 
                         return self.__Get(elems=edges, type="edge", query=query)
                 except:
@@ -453,10 +468,7 @@ class GraphMongo(MongoClient, set):
 			nodes = list()
                         elems += self.__GetNodeNeighbours(edges=edges, direction=direction)
 		else:
-			if isinstance(nodes,GraphMongo):
-				nodes=list(set(nodes))
-			elif isinstance(nodes,set):
-				nodes=list(nodes)
+			nodes = Utils.wrapElem(nodes)
 			elems = self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction=direction)
               
 
@@ -468,11 +480,12 @@ class GraphMongo(MongoClient, set):
 		if "nodes" in disjunction:
 			elems = elems - set(nodes)
 		if "accumulated" in disjunction:
-			elems = elems - set(self._accumulatedresults)
+			elems = elems - set(self._accumulatednodes)
 
 		aux = self.CopyObject() ### pipeline method
 		aux.SetParameters(results=elems)
-                aux._accumulatedresults = aux._accumulatedresults | set(nodes) 
+                aux._accumulatednodes = aux._accumulatednodes | set(nodes) 
+		
 		return aux
 
 
@@ -581,20 +594,17 @@ class GraphMongo(MongoClient, set):
 		###pipeline method
 		elems={}
 
-		##param manager
+		##param pipeline manager
                 if nodes is None and set(self) is not None and len(self)>0:
                         nodes = list(set(self))
 
 		if nodes is None:
 			nodes = list()	
 			nodes = self.GetNodes()
-
-                if nodes:
-                        if isinstance(nodes,GraphMongo):
-                                nodes=list(set(nodes))
-                        elif isinstance(nodes,set):
-                                nodes=list(nodes)
 		
+		if nodes:
+			nodes = Utils.wrapElem(nodes)
+
 		for node in nodes:
 		        outdegree = self.__GetNodeNeighbours(nodes=[node],direction="tail")
 	                indegree = self.__GetNodeNeighbours(nodes=[node],direction="head")
@@ -619,16 +629,11 @@ class GraphMongo(MongoClient, set):
 			targets = self.GetNodes()
 
 		if sources:
-                        if isinstance(sources,GraphMongo):
-                                sources=list(set(sources))
-                        elif isinstance(sources,set):
-                                sources=list(sources)
-                if targets:
-                        if isinstance(targets,GraphMongo):
-                                targets=list(set(targets))
-                        elif isinstance(targets,set):
-                                targets=list(targets)
+			sources = Utils.wrapElem(sources)			
 
+                if targets:
+			targets = Utils.wrapElem(targets)
+		
 		elems={}
 		
 		for source in sources:
@@ -822,21 +827,13 @@ def CreateSimpleGraph():
 
         ##create edges
         edge65 = graph.AddEdge(head=node6,tail=node2, weight=9, type="simple")
-
         edge61 = graph.AddEdge(head=node6,tail=node1, weight=14, type="simple")
-
         edge63 = graph.AddEdge(head=node6,tail=node3, weight=2, type="simple")
-
         edge13 = graph.AddEdge(head=node1,tail=node3, weight=9, type="simple")
-
         edge12 = graph.AddEdge(head=node1,tail=node2, weight=7, type="simple")
-
         edge23 = graph.AddEdge(head=node2,tail=node3, weight=10, type="simple")
-
         edge24 = graph.AddEdge(head=node2,tail=node2, weight=15, type="simple")
-
         edge34 = graph.AddEdge(head=node3,tail=node4, weight=11, type="simple")
-
         edge45 = graph.AddEdge(head=node4,tail=node5, weight=6, type="simple")
 
 
