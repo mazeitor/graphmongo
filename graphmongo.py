@@ -93,6 +93,7 @@ class GraphMongo(MongoClient, set):
 		##don't need to open a new connection because was already opened
 		graph = GraphMongo(address=self.address, port=self.port, dbname=self._ddbb, results=set(self), connection=False) 
 		graph._accumulated = self._accumulated	
+		graph._pipetype = self._pipetype
 
 		return graph
 
@@ -467,12 +468,20 @@ class GraphMongo(MongoClient, set):
                 '''
                 elems=[]
 
+		
+
 		#param manager for pipeline method
 		if nodes is None:
-			if set(self) is not None and len(self)>0:
+			if set(self) is not None and len(self)>0 and self._pipetype=="node":
 				nodes = list(set(self))
-              		elif edges is None:
-				nodes = list()
+              		#elif edges is None:
+			#	nodes = list()
+		if edges is None:
+			if set(self) is not None and len(self)>0 and self._pipetype=="edge":
+				edges = list(set(self))
+	
+		if nodes is None and edges is None:
+			nodes = list()	
 		if nodes is None and edges is not None:
 			nodes = list()
 			edges = Utils.wrapElems(edges)
@@ -926,10 +935,13 @@ def Queries():
         print "\nget edges quering by weight"
         edges = graph.GetEdges(query={"weight":6})
         print set(edges)
-
+	
         print "\nget related nodes by edges"
         doc = graph.GetNeighbours(edges=edges)
         print set(doc)
+        doc = edges.GetNeighbours()
+	print set(doc)
+	
 	print "\nget nodes FROM by edges"
         doc = graph.GetNeighbours(edges=edges, direction="head")
         print set(doc)
