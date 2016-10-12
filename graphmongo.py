@@ -19,7 +19,7 @@ class Utils():
 	Utils class for check, validations and wrappers
 	'''
 	@classmethod
-	def wrapElem(self,elem):
+	def wrapElems(self,elem):
 		'''
 		@brief: change elem type to list of ObjectId's
 		@param elem: object with elements
@@ -29,7 +29,7 @@ class Utils():
                        	elem=list(set(elem))
                	elif isinstance(elem,set):
                         elem=list(elem)
-		elif not isinstance(elem,list):
+		elif not isinstance(elem,list) and elem is not None:
                        	elem=[elem]
 
       		return elem
@@ -40,14 +40,15 @@ class GraphMongo(MongoClient, set):
 	Graph class for mongodb database
 	'''
 	
-	address = "localhost"  ###databse ip address
-	port = 27017           ###databae listen port
+	address = "localhost"  	###databse ip address
+	port = 27017           	###databae listen port
 
-	_ddbb = "graph"        ###database name
-	_node = "node"         ###collection name for nodes
-	_edge = "edge"         ###collection name for esges
+	_ddbb = "graph"        	###database name
+	_node = "node"         	###collection name for nodes
+	_edge = "edge"         	###collection name for esges
 
-	_accumulated = set([]) ###adding nodes from previous queries
+	_accumulated = set([]) 	###adding nodes from previous queries
+	_pipetype = "node" 	###pipe type for pipe feature of some functions
 
 
 	def __init__(self, address="localhost", port=27017, dbname="graph", results=set([]), connection=True):
@@ -319,8 +320,11 @@ class GraphMongo(MongoClient, set):
 
 			if elems is None: ###pipeline method
 				elems = list(set(self))
-			elif elems is not None and isinstance(elems,set):
-				elems = list(elems)
+			else:
+				elems = Utils.wrapElems(elems)# and isinstance(elems,set):
+				#elems = list(elems)
+
+			#elems = Utils.wrapElems(elems)
 
                         ids = elems
                         if len(ids) > 0:
@@ -399,13 +403,19 @@ class GraphMongo(MongoClient, set):
                                 query.update({"weight" : weight})	
 			
                         if head is not None:
-				head = Utils.wrapElem(head)
+				head = Utils.wrapElems(head)
 				query.update({"head._id" : {"$in" : head}})
 			if tail is not None:
-                                tail = Utils.wrapElem(tail)
+                                tail = Utils.wrapElems(tail)
 				query.update({"tail._id" : {"$in" : tail}})
+                        
+			elems = set(self.__Get(elems=edges, type="edge", query=query))
 
-                        return self.__Get(elems=edges, type="edge", query=query)
+                        ##defining pipeline method output
+			self._pipetype = "edge"
+                        aux = self._CopyObject()
+                        aux.SetParameters(results=elems)
+                        return aux
                 except:
                         return {"status":"ko"}
 
@@ -435,6 +445,7 @@ class GraphMongo(MongoClient, set):
 			elems = set(self.__Get(type="node", query=query))
 
 			##defining pipeline method output
+			self._pipetype = "node"
 			aux = self._CopyObject() 
 			aux.SetParameters(results=elems)
 			return aux
@@ -464,9 +475,11 @@ class GraphMongo(MongoClient, set):
 				nodes = list()
 		if nodes is None and edges is not None:
 			nodes = list()
+			edges = Utils.wrapElems(edges)
                         elems += self.__GetNodeNeighbours(edges=edges, direction=direction)
 		else:
-			nodes = Utils.wrapElem(nodes)
+			nodes = Utils.wrapElems(nodes)
+			edges = Utils.wrapElems(edges)
 			elems = self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction=direction)
               
 
@@ -601,7 +614,7 @@ class GraphMongo(MongoClient, set):
 			nodes = self.GetNodes()
 		
 		if nodes:
-			nodes = Utils.wrapElem(nodes)
+			nodes = Utils.wrapElems(nodes)
 
 		for node in nodes:
 		        outdegree = self.__GetNodeNeighbours(nodes=[node],direction="tail")
@@ -627,10 +640,10 @@ class GraphMongo(MongoClient, set):
 			targets = self.GetNodes()
 
 		if sources:
-			sources = Utils.wrapElem(sources)			
+			sources = Utils.wrapElems(sources)			
 
                 if targets:
-			targets = Utils.wrapElem(targets)
+			targets = Utils.wrapElems(targets)
 		
 		elems={}
 		
@@ -744,8 +757,7 @@ class GraphMongo(MongoClient, set):
                                         dist[v] = float('inf')
 
 				###get distance between nodes
-				edges = self.GetEdges(head=u,tail=v)
-				edges = self.Fetch(edges, type="edge")
+				edges = self.GetEdges(head=u,tail=v).Fetch(type="edge")
 				distance = float('inf')
 				for edge in edges:
 					if edge["weight"]<distance:
@@ -910,10 +922,10 @@ def Queries():
 	
 	print "\nget edges by weight"
 	edges = graph.GetEdges(weight=6)
-	print edges
+	print set(edges)
         print "\nget edges quering by weight"
         edges = graph.GetEdges(query={"weight":6})
-        print edges
+        print set(edges)
 
         print "\nget related nodes by edges"
         doc = graph.GetNeighbours(edges=edges)
@@ -926,6 +938,8 @@ def Queries():
         print set(doc)
 
 	print "\nFetch edges from a list"
+	fetched = edges.Fetch(type="edge")
+	print fetched
 	fetched = graph.Fetch(elems=edges, type="edge")
 	print fetched
 
