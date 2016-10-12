@@ -1,4 +1,3 @@
-###import pymongo api
 import pymongo
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -6,27 +5,53 @@ import random
 import math
 import time
 import argparse
+import heapq
+import pdb
+import Queue
 
 
 '''
 Created on 01 July 2016
 @author: oriol mazariegos
 '''
+class Utils():
+	'''
+	Utils class for check, validations and wrappers
+	'''
+	@classmethod
+	def wrapElems(self,elem):
+		'''
+		@brief: change elem type to list of ObjectId's
+		@param elem: object with elements
+		@return: list of ObjectId's 
+		'''
+               	if isinstance(elem,GraphMongo):
+                       	elem=list(set(elem))
+               	elif isinstance(elem,set):
+                        elem=list(elem)
+		elif not isinstance(elem,list) and elem is not None:
+                       	elem=[elem]
+
+      		return elem
+
+
 class GraphMongo(MongoClient, set):
 	'''
 	Graph class for mongodb database
 	'''
 	
-	address = "localhost"  ###databse ip address
-	port = 27017           ###databae listen port
+	address = "localhost"  	###databse ip address
+	port = 27017           	###databae listen port
 
-	_ddbb = "graph"        ###database name
-	_node = "node"         ###collection name for nodes
-	_edge = "edge"         ###collection name for esges
+	_ddbb = "graph"        	###database name
+	_node = "node"         	###collection name for nodes
+	_edge = "edge"         	###collection name for esges
 
-	_accumulatedresults = set([]) ###store accumulation of old query results
+	_accumulated = set([]) 	###adding nodes from previous queries
+	_pipetype = "node" 	###pipe type for pipe feature of some functions
 
-	def __init__(self, address="localhost", port=27017, dbname="graph", results=set([])):
+
+	def __init__(self, address="localhost", port=27017, dbname="graph", results=set([]), connection=True):
 		''' 
         	@brief: init a connection with mongo ddbb
         	@param address: ip address where the database is located 
@@ -35,41 +60,45 @@ class GraphMongo(MongoClient, set):
                 @param results: list of ObjectId to initialize the instance with previous queries 
 		'''
 		self.SetParameters(address,port,dbname,results)
-		super(GraphMongo,self).__init__(self.address,self.port)
+		if connection == True:
+			super(GraphMongo,self).__init__(self.address,self.port)
 		
 
-	def CopyObject(self):
-		'''
-		@brief: copy full object
-		@return: GraphMongo element
-		'''
-		graph = GraphMongo(self.address, self.port, self._ddbb, set(self)) 
-		graph._accumulatedresults = self._accumulatedresults	
-		return graph
-
-
-	def SetParameters(self, address=None, port=None, dbname=None, results=None):
-		'''
-		@brief: set parameters like address and port of the mongo instance, name of the database and results of previous query
+        def SetParameters(self, address=None, port=None, dbname=None, results=None):
+                '''
+                @brief: set parameters like address and port of the mongo instance, name of the database and results of previous query
                 @param address: ip address where the database is located
                 @param port: port where the database is listening
                 @param dbname: name for the graph database
                 @param results: list of ObjectId to initialize the instance with previous queries
-		'''
-		if address is not None:
-			self.address = address
-		if port is not None:
-			self.port = port
-		if address is not None or port is not None:
-			MongoClient.__init__(self,self.address,self.port)
+                '''
+                if address is not None:
+                        self.address = address
+                if port is not None:
+                        self.port = port
+                if address is not None or port is not None:
+                        MongoClient.__init__(self,self.address,self.port)
                 if dbname is not None:
                         self._ddbb = dbname
-		if results is not None:
-			self.clear()
-			self.update(results)
+                if results is not None:
+                        self.clear()
+                        self.update(results)
 
 
-	def Reset(self):
+	def _CopyObject(self):
+		'''
+		@brief: copy full object
+		@return: GraphMongo element
+		'''
+		##don't need to open a new connection because was already opened
+		graph = GraphMongo(address=self.address, port=self.port, dbname=self._ddbb, results=set(self), connection=False) 
+		graph._accumulated = self._accumulated	
+		graph._pipetype = self._pipetype
+
+		return graph
+
+	
+	def _Reset(self):
 		'''
 		@brief: remove current and accumulated results come from previous queries
 		@return: graphmongo object
@@ -77,9 +106,9 @@ class GraphMongo(MongoClient, set):
 		##remove current values
 		self.clear()
 		##remove accumulated values
-		self._accumulatedresults.clear()
-		
-		aux = self.CopyObject() ###pipeline method
+		self._accumulated.clear()
+	
+		aux = self._CopyObject() ###pipeline method
 		return aux
 
         
@@ -142,7 +171,6 @@ class GraphMongo(MongoClient, set):
 				edge = {}
 				edge["_id"]=None
 				
-
 			if edge["_id"] is None:
 				edge["_id"]=ObjectId()
 
@@ -293,8 +321,11 @@ class GraphMongo(MongoClient, set):
 
 			if elems is None: ###pipeline method
 				elems = list(set(self))
-			elif elems is not None and isinstance(elems,set):
-				elems = list(elems)
+			else:
+				elems = Utils.wrapElems(elems)# and isinstance(elems,set):
+				#elems = list(elems)
+
+			#elems = Utils.wrapElems(elems)
 
                         ids = elems
                         if len(ids) > 0:
@@ -351,7 +382,7 @@ class GraphMongo(MongoClient, set):
 			return {"status":"ko"}
 
 
-	def GetEdges(self, edges=None, label=None, weight=None, direction=None, query=None):
+	def GetEdges(self, edges=None, head=None, tail=None, label=None, weight=None, direction=None, query=None):
 		'''
                 @brief: get list of edges given id's, label or quering
                 @param edges: list of edges
@@ -363,16 +394,29 @@ class GraphMongo(MongoClient, set):
 		'''
                 try:
                         elems=[]
+			if query is None:
+                        	query = {}
+
                         if label is not None:
-                                if query is None:
-                                        query = {}
                                 query.update({"label" : label})
 
                         if weight is not None:
-                                if query is None:
-                                        query = {}
-                                query.update({"weight" : weight})
-                        return self.__Get(elems=edges, type="edge", query=query)
+                                query.update({"weight" : weight})	
+			
+                        if head is not None:
+				head = Utils.wrapElems(head)
+				query.update({"head._id" : {"$in" : head}})
+			if tail is not None:
+                                tail = Utils.wrapElems(tail)
+				query.update({"tail._id" : {"$in" : tail}})
+                        
+			elems = set(self.__Get(elems=edges, type="edge", query=query))
+
+                        ##defining pipeline method output
+			self._pipetype = "edge"
+                        aux = self._CopyObject()
+                        aux.SetParameters(results=elems)
+                        return aux
                 except:
                         return {"status":"ko"}
 
@@ -397,12 +441,13 @@ class GraphMongo(MongoClient, set):
 				query.update({"weight" : weight})
                         
 			##reset values as a first endpoint 
-			self.Reset() 
+			self._Reset() 
 			
 			elems = set(self.__Get(type="node", query=query))
 
 			##defining pipeline method output
-			aux = self.CopyObject() 
+			self._pipetype = "node"
+			aux = self._CopyObject() 
 			aux.SetParameters(results=elems)
 			return aux
 		except:
@@ -423,20 +468,27 @@ class GraphMongo(MongoClient, set):
                 '''
                 elems=[]
 
+		
+
 		#param manager for pipeline method
 		if nodes is None:
-			if set(self) is not None and len(self)>0:
+			if set(self) is not None and len(self)>0 and self._pipetype=="node":
 				nodes = list(set(self))
-              		elif edges is None:
-				nodes = list()
+              		#elif edges is None:
+			#	nodes = list()
+		if edges is None:
+			if set(self) is not None and len(self)>0 and self._pipetype=="edge":
+				edges = list(set(self))
+	
+		if nodes is None and edges is None:
+			nodes = list()	
 		if nodes is None and edges is not None:
 			nodes = list()
+			edges = Utils.wrapElems(edges)
                         elems += self.__GetNodeNeighbours(edges=edges, direction=direction)
 		else:
-			if isinstance(nodes,GraphMongo):
-				nodes=list(set(nodes))
-			elif isinstance(nodes,set):
-				nodes=list(nodes)
+			nodes = Utils.wrapElems(nodes)
+			edges = Utils.wrapElems(edges)
 			elems = self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction=direction)
               
 
@@ -448,11 +500,12 @@ class GraphMongo(MongoClient, set):
 		if "nodes" in disjunction:
 			elems = elems - set(nodes)
 		if "accumulated" in disjunction:
-			elems = elems - set(self._accumulatedresults)
+			elems = elems - set(self._accumulated)
 
-		aux = self.CopyObject() ### pipeline method
+		aux = self._CopyObject() ### pipeline method
 		aux.SetParameters(results=elems)
-                aux._accumulatedresults = aux._accumulatedresults | set(nodes) 
+                aux._accumulated = aux._accumulated | set(nodes) 
+		
 		return aux
 
 
@@ -533,7 +586,10 @@ class GraphMongo(MongoClient, set):
 		except:
 			return {"status":"ko"}
 
-	####### measures and metrics
+
+	##################################
+	###### MEASURES AND METRICS ######
+	##################################
 	def VertexCount(self):
 		'''
 		@brief: gives a count of the number of vertices in the graph
@@ -558,26 +614,171 @@ class GraphMongo(MongoClient, set):
 		###pipeline method
 		elems={}
 
-		##param manager
+		##param pipeline manager
                 if nodes is None and set(self) is not None and len(self)>0:
                         nodes = list(set(self))
 
 		if nodes is None:
 			nodes = list()	
 			nodes = self.GetNodes()
-
-                if nodes:
-                        if isinstance(nodes,GraphMongo):
-                                nodes=list(set(nodes))
-                        elif isinstance(nodes,set):
-                                nodes=list(nodes)
 		
+		if nodes:
+			nodes = Utils.wrapElems(nodes)
+
 		for node in nodes:
 		        outdegree = self.__GetNodeNeighbours(nodes=[node],direction="tail")
 	                indegree = self.__GetNodeNeighbours(nodes=[node],direction="head")
 			degree = len(outdegree)+len(indegree)
 			elems[node]=degree
 		return elems	
+
+
+	################################
+	##### DISTANCES ALGORITHMS #####
+	################################
+	def GraphDistance(self, sources, targets=None, algorithm=None):
+		'''
+		@brief: gives the distance from source vertes to target vertex
+		@param sources: list of ObjectId's of source nodes
+		@param targets: list of ObjectId's of target nodes		
+		@param algorithm: function to be called as a parameter. the function have to follow the input/output like __GraphDistance(self, source, target=None) generic function
+		@return: dictionary with relation of sources and targets. This relation is a list of intermediate ObjectId nodes and weights
+		'''
+		
+		if targets is None:
+			targets = self.GetNodes()
+
+		if sources:
+			sources = Utils.wrapElems(sources)			
+
+                if targets:
+			targets = Utils.wrapElems(targets)
+		
+		elems={}
+		
+		for source in sources:
+			elems[source] = {}
+			if algorithm is None:
+				algorithm = self.BreadthFirstSearch
+			distance = algorithm(source=source, targets=targets)
+			elems[source] = distance
+		return elems
+
+
+        def AStar(self, source, target=None):
+                '''
+                @brief: gives the distance and previous node from source vertex to target vertex, complexity=O(log h* (x))
+                @param source: ObjectId of source node
+                @param target: list of ObjectId of target nodes
+                @return: dictionary with relation of source and targets. fist the tag "distance" give the distance from source to target and in the "from" the node where we have arrived to the current node
+                '''
+
+                return {"distance":0,"path":set([])}
+
+
+        def UniformCostSearch(self, source, target=None):
+                '''
+                @brief: gives the distance and previous node from source vertex to target vertex, complexity=O(b^(1 + C / epsilon))
+                @param source: ObjectId of source node
+                @param target: list of ObjectId of target nodes
+                @return: dictionary with relation of source and targets. fist the tag "distance" give the distance from source to target and in the "from" the node where we have arrived to the current node
+                '''
+                return {"distance":0,"path":set([])}
+
+
+
+	def BreadthFirstSearch(self, source, targets=None):
+                '''
+                @brief: gives the distance and previous node from source vertex to target vertex for unweighted graphs. complexity=O(|E|+|V|)
+                @param source: ObjectId of source node
+                @param target: list of ObjectId of target nodes
+                @return: dictionary with relation of source and targets. fist the tag "distance" give the distance from source to target and in the "from" the node where we have arrived to the current node
+                '''
+                ###initialization
+                prev = dict()
+                dist = dict()
+                seen = dict()
+                dist[source] = 0
+
+                ###create a vertex set Q
+                Q = []
+                heapq.heappush(Q,source)
+
+                while Q: ###main loop
+                        u = heapq.heappop(Q) ###remove and return best vertex
+                        seen[u] = True
+                        neighbours = self.GetNeighbours(nodes=[u])
+
+                        for v in set(neighbours):
+                                ###check if the node have been seen before
+                                if seen.has_key(v) and seen[v] == True: continue
+
+                                ###get distance between nodes
+				distance = 1
+
+                                alt = dist[u] + distance
+                                dist[v] = alt
+                                prev[v] = u
+                                heapq.heappush(Q,v)
+
+				###remove from targets, leave condition
+				if v in targets:
+					targets.remove(v)
+
+                return {"distance":dist,"from":prev}
+
+
+	def Dijkstra(self, source, targets=None):
+                '''
+                @brief: gives the distance and previous node from source vertex to target vertex for weighted graph. complexity=O((|E|+|V|) log |V|) = O(|E| log |V|) because we are using priority queue
+                @param source: ObjectId of source node
+                @param target: list of ObjectId of target nodes
+                @return: dictionary with relation of source and targets. fist the tag "distance" give the distance from source to target and in the "from" the node where we have arrived to the current node
+                '''
+		###initialization
+		prev = dict()
+		dist = dict()
+		seen = dict()
+		dist[source] = 0
+
+		###create a vertex set Q
+		Q = []	
+		heapq.heappush(Q,(source, dist[source]))
+		for target in targets:
+			if source != target:
+				dist[target] = float('inf')	###infinite
+				prev[target] = None		###undefined
+				seen[target] = False		###unseen
+				heapq.heappush(Q,(target, dist[target])) ### add target node to queue
+		
+		while Q: ###main loop
+			item = heapq.heappop(Q) ###remove and return best vertex
+			u = item[0]
+			seen[u] = True	
+			neighbours = self.GetNeighbours(nodes=[u])
+					
+			for v in set(neighbours):
+				###check if the node have been seen before
+				if seen.has_key(v) and seen[v] == True:	continue
+				
+				###check if the distance to new node is in the dist structure
+				if not dist.has_key(v):
+                                        dist[v] = float('inf')
+
+				###get distance between nodes
+				edges = self.GetEdges(head=u,tail=v).Fetch(type="edge")
+				distance = float('inf')
+				for edge in edges:
+					if edge["weight"]<distance:
+						distance=edge["weight"]
+
+				alt = dist[u] + distance
+				if alt < dist[v]:
+					dist[v] = alt
+					prev[v] = u
+					heapq.heappush(Q,(v, dist[v]))
+		
+		return {"distance":dist,"from":prev}	
 
 
 def CreateDirectedGraph():
@@ -645,26 +846,19 @@ def CreateSimpleGraph():
 
         ##create edges
         edge65 = graph.AddEdge(head=node6,tail=node2, weight=9, type="simple")
-
         edge61 = graph.AddEdge(head=node6,tail=node1, weight=14, type="simple")
-
         edge63 = graph.AddEdge(head=node6,tail=node3, weight=2, type="simple")
-
         edge13 = graph.AddEdge(head=node1,tail=node3, weight=9, type="simple")
-
         edge12 = graph.AddEdge(head=node1,tail=node2, weight=7, type="simple")
-
         edge23 = graph.AddEdge(head=node2,tail=node3, weight=10, type="simple")
-
         edge24 = graph.AddEdge(head=node2,tail=node2, weight=15, type="simple")
-
         edge34 = graph.AddEdge(head=node3,tail=node4, weight=11, type="simple")
-
         edge45 = graph.AddEdge(head=node4,tail=node5, weight=6, type="simple")
+
+	graph.close()
 
 
 def Queries():
-	import pdb
 	##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
 
@@ -737,14 +931,17 @@ def Queries():
 	
 	print "\nget edges by weight"
 	edges = graph.GetEdges(weight=6)
-	print edges
+	print set(edges)
         print "\nget edges quering by weight"
         edges = graph.GetEdges(query={"weight":6})
-        print edges
-
+        print set(edges)
+	
         print "\nget related nodes by edges"
         doc = graph.GetNeighbours(edges=edges)
         print set(doc)
+        doc = edges.GetNeighbours()
+	print set(doc)
+	
 	print "\nget nodes FROM by edges"
         doc = graph.GetNeighbours(edges=edges, direction="head")
         print set(doc)
@@ -753,6 +950,8 @@ def Queries():
         print set(doc)
 
 	print "\nFetch edges from a list"
+	fetched = edges.Fetch(type="edge")
+	print fetched
 	fetched = graph.Fetch(elems=edges, type="edge")
 	print fetched
 
@@ -767,8 +966,9 @@ def Queries():
 	nodes1 = nodes.GetNeighbours(disjunction=["nodes","accumulated"])
         print set(nodes1)
 
-def Metrics():
+	graph.close()
 
+def Metrics():
         ##create instance for graphAPI for mongodb
         graph = GraphMongo('localhost', 27018)
 
@@ -793,7 +993,42 @@ def Metrics():
 	vd = graph.VertexDegree(nodes=nodes)
 	print vd
 
+        print "\nGraph distances unweighted graph using BreadthFirstSearch"
+        source = graph.GetNodes(weight=6)
+        target = graph.GetNodes(weight=4)
+        vd = graph.GraphDistance(sources=source,targets=target)
+        source = list(set(source))
+        target = list(set(target))
+        distance = vd[source[0]]["distance"]
+        print "distance: between {0} and {1} is {2}".format(source[0],target[0],distance[target[0]])
 
+        print "shortest path"
+        path = vd[source[0]]["from"]
+        item = target[0]
+        while item != source[0]:
+                print "node: ",item,", with distance: ",distance[item]
+                item = path[item]
+        print "node: ",item,", with distance: ",distance[item]
+
+
+	print "\nGraph distances weighted grapg using Dijkstra"
+	source = graph.GetNodes(weight=6)
+	target = graph.GetNodes(weight=4)
+	vd = graph.GraphDistance(sources=source,targets=target,algorithm=graph.Dijkstra)
+	source = list(set(source))
+        target = list(set(target))
+	distance = vd[source[0]]["distance"]
+	print "distance: between {0} and {1} is {2}".format(source[0],target[0],distance[target[0]])
+
+	print "shortest path"
+	path = vd[source[0]]["from"]
+	item = target[0]
+	while item != source[0]:
+		print "node: ",item,", with distance: ",distance[item] 
+		item = path[item]
+	print "node: ",item,", with distance: ",distance[item]
+	
+	graph.close()
 
 if __name__ == '__main__':
 
