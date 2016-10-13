@@ -122,8 +122,8 @@ relatednodes = graph.GetNeighbours(nodes=nodes)
 fetched = graph.Fetch(elems=nodes)
 ```
 
-#### Shortest path algorithm
-GraphMongo framework has implemented methods to get the shortest path between nodes using in weighted and unweighted graph, this methods are Dijkstra and Breadth-first search. For using the desired method we only have to put as a parameter the name of the function, for instance, Dijkstra or BreadthFirstSearch. As an ouput of the GraphDistance function it is provided a dictionary which as a key has the id's of the nodes sources and each value is an object with the attributes "distance" and "from". "distance" is a dictionary with the distance between the source and each target node and "from" is another dictionary with the parent of the node.
+#### Using shortest path methods
+GraphMongo framework has implemented the feature to get the shortest path between nodes using weighted and unweighted graph. This algorithms are Dijkstra and Breadth-first search. For using the desired algorithm we only have to put as a parameter the function, for instance, Dijkstra or BreadthFirstSearch. As an ouput of the GraphDistance function it is provided a dictionary, which as a key has the id's of the sources nodes and each value is an object with the attributes "distance" and "from". "distance" is a dictionary with the distance between the source and each target node and "from" is another dictionary with the parent of the node.
 ```python
 ###get the nodes with label equal 6
 source = graph.GetNodes(label=6)
