@@ -497,7 +497,6 @@ class GraphMongo(MongoClient, set):
                 elems=[]
 
 		
-
 		#param manager for pipeline method
 		if nodes is None:
 			if set(self) is not None and len(self)>0 and self._pipetype=="node":
@@ -527,13 +526,17 @@ class GraphMongo(MongoClient, set):
 			disjunction = list()	
 		if "nodes" in disjunction:
 			elems = elems - set(nodes)
-		if "accumulated" in disjunction:
+		if "accumulated" in disjunction:# and self._pipetype == "node":
 			elems = elems - set(self._accumulated)
 
 		aux = self._CopyObject() ### pipeline method
 		aux.SetParameters(results=elems)
-                aux._accumulated = aux._accumulated | set(nodes) 
-		
+		aux._accumulated = aux._accumulated | set(nodes) ##we accumulated nodes and edges without distinction
+		#if self._pipetype == "node":
+                #	aux._accumulated = aux._accumulated | set(nodes) 
+		#else:
+		#	aux._accumulated = set(nodes)	
+
 		return aux
 
 
