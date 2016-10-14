@@ -1,3 +1,31 @@
+'''
+Copyright 2016, Oriol Mazariegos Canellas <oriol.mazariegoscanellas@gmail.com> 
+ 
+This file is part of the GraphMongo framework.
+
+GraphMongo is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+GraphMongo is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with GraphMongo.  If not, see <http://www.gnu.org/licenses/>.
+'''
+
+__author__ = "Oriol Mazariegos"
+__copyright__ = "Copyright 2016, GraphMongo"
+__credits__ = ["Oriol Mazariegos"]
+__license__ = "GPL"
+__version__ = "1.0.0"
+__maintainer__ = "Oriol Mazariegos"
+__email__ = "oriol.mazariegos@gmail.com"
+__status__ = "Production"
+
 import pymongo
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -8,7 +36,6 @@ import argparse
 import heapq
 import pdb
 import Queue
-
 
 '''
 Created on 01 July 2016
