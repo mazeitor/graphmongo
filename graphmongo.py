@@ -17,14 +17,18 @@ You should have received a copy of the GNU General Public License
 along with GraphMongo.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-__author__ = "Oriol Mazariegos"
-__copyright__ = "Copyright 2016, GraphMongo"
-__credits__ = ["Oriol Mazariegos"]
-__license__ = "GPL"
-__version__ = "1.0.0"
-__maintainer__ = "Oriol Mazariegos"
-__email__ = "oriol.mazariegos@gmail.com"
-__status__ = "Production"
+'''
+Created on 01 July 2016
+@author: oriol mazariegos
+@copyright: Copyright 2016, GraphMongo
+@credits: ["Oriol Mazariegos"]
+@license: GPL
+@version: 1.0.0
+@maintainer: oriol mazariegos
+@email: oriol.mazariegos@gmail.com
+@status: production
+
+'''
 
 import pymongo
 from pymongo import MongoClient
@@ -37,10 +41,7 @@ import heapq
 import pdb
 import Queue
 
-'''
-Created on 01 July 2016
-@author: oriol mazariegos
-'''
+
 class Utils():
 	'''
 	Utils class for check, validations and wrappers
