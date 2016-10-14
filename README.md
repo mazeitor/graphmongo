@@ -77,7 +77,8 @@ nodes = graph.GetNodes(label=6).GetNeighbours()
 edges = graph.GetEdges(label=6).GetNeighbours().Fetch()
 ```
 
-Using **disjunction** option to get desired related nodes. GetNeighbour method grasp all related nodes given as an input a collection of nodes. Sometimes, we would like other kind of answers like, related nodes are not linked with the input nodes (for instance a link between input nodes) or nodes in previous queries. We can achieve that with [Set](https://docs.python.org/2/library/sets.html) operators but When we are using the pipe feature we lose this possibility so we have added this options to allow configure our desired query. Disjunction is a list that can take "nodes" or "accumulated" option. 
+Using **disjunction** option to get desired related nodes. GetNeighbour method grasp all related nodes given as an input a collection of nodes. Sometimes, we would like other kind of answers like, related nodes are not linked with the input nodes (for instance a link between input nodes) or nodes in previous queries. We can achieve that with [Set](https://docs.python.org/2/library/sets.html) operators but when the pipe feature is used we lose this possibility. To solve that problem, the GraphMongo framework has an option to allow works with it. This option is called "disjunction" which is a list type that can takes as an option values "nodes" and "accumulated". The "nodes" value remove the input nodes from the output and the "accumulated" value removes the previous grasped nodes from the output. 
+
 ```python
 ###get related nodes of related nodes of nodes with label 6
 nodes = graph.GetNodes(label=6)
@@ -125,14 +126,14 @@ fetched = graph.Fetch(elems=nodes)
 #### Using shortest path methods
 GraphMongo framework has implemented the feature to get the shortest path between nodes using weighted and unweighted graph. This algorithms are Dijkstra and Breadth-first search. For using the desired algorithm we only have to put as a parameter the function, for instance, Dijkstra or BreadthFirstSearch. As an ouput of the GraphDistance function it is provided a dictionary, which as a key has the id's of the sources nodes and each value is an object with the attributes "distance" and "from". "distance" is a dictionary with the distance between the source and each target node and "from" is another dictionary with the parent of the node.
 ```python
-###get the nodes with label equal 6
-source = graph.GetNodes(label=6)
-###get the nodes with label equal 4
-target = graph.GetNodes(label=4)
+###get the nodes with weight equal 6
+source = graph.GetNodes(weight=6)
+###get the nodes with weight equal 4
+target = graph.GetNodes(weight=4)
 ###get shortestpath between source and targets nodes using dijkstra algorithm for weighted graph
 gdDijkstra = graph.GraphDistance(sources=source,targets=target,algorithm=graph.Dijkstra)
 ###get shortestpath between source and targets nodes using breadth-first search algorithm for unweighted graph
-gdbfs = graph.GraphDistance(sources=source,targets=target,algorithm=graph.BreadthFirstSearch)
+gdBFS = graph.GraphDistance(sources=source,targets=target,algorithm=graph.BreadthFirstSearch)
 ```
 
 #### TODO

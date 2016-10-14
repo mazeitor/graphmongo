@@ -1,5 +1,5 @@
 '''
-Copyright 2016, Oriol Mazariegos Canellas <oriol.mazariegoscanellas@gmail.com> 
+Copyright 2016, Oriol Mazariegos Canellas <oriol.mazariegos@gmail.com> 
  
 This file is part of the GraphMongo framework.
 
