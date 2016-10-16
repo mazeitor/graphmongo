@@ -79,26 +79,26 @@ class GraphMongo(MongoClient, set):
 	_pipetype = "node" 	###pipe type for pipe feature of some functions
 
 
-	def __init__(self, address="localhost", port=27017, dbname="graph", results=set([]), connection=True):
+	def __init__(self, address="localhost", port=27017, dbname="graph", elems=None, connection=True):
 		''' 
         	@brief: init a connection with mongo ddbb
         	@param address: ip address where the database is located 
         	@param port: port where the database is listening
 		@param dbname: name for the graph database
-                @param results: list of ObjectId to initialize the instance with previous queries 
+                @param elems: list of ObjectId to initialize the instance with previous queries 
 		'''
-		self.SetParameters(address,port,dbname,results)
+		self.SetParameters(address,port,dbname,elems)
 		if connection == True:
 			super(GraphMongo,self).__init__(self.address,self.port)
 		
 
-        def SetParameters(self, address=None, port=None, dbname=None, results=None):
+        def SetParameters(self, address=None, port=None, dbname=None, elems=None, pipetype=None):
                 '''
                 @brief: set parameters like address and port of the mongo instance, name of the database and results of previous query
                 @param address: ip address where the database is located
                 @param port: port where the database is listening
                 @param dbname: name for the graph database
-                @param results: list of ObjectId to initialize the instance with previous queries
+                @param elems: list of ObjectId to initialize the instance with previous queries
                 '''
                 if address is not None:
                         self.address = address
@@ -108,9 +108,14 @@ class GraphMongo(MongoClient, set):
                         MongoClient.__init__(self,self.address,self.port)
                 if dbname is not None:
                         self._ddbb = dbname
-                if results is not None:
+                if elems is not None:
+			elements = Utils.wrapElems(elems)
                         self.clear()
-                        self.update(results)
+                        self.update(elements)
+			if isinstance(elems,GraphMongo):
+				self._pipetype = elems._pipetype
+			if pipetype is not None:
+				self._pipetype = pipetype
 
 
 	def _CopyObject(self):
@@ -119,7 +124,7 @@ class GraphMongo(MongoClient, set):
 		@return: GraphMongo element
 		'''
 		##don't need to open a new connection because was already opened
-		graph = GraphMongo(address=self.address, port=self.port, dbname=self._ddbb, results=set(self), connection=False) 
+		graph = GraphMongo(address=self.address, port=self.port, dbname=self._ddbb, elems=self, connection=False) 
 		graph._accumulated = self._accumulated	
 		graph._pipetype = self._pipetype
 
@@ -443,7 +448,7 @@ class GraphMongo(MongoClient, set):
                         ##defining pipeline method output
 			self._pipetype = "edge"
                         aux = self._CopyObject()
-                        aux.SetParameters(results=elems)
+                        aux.SetParameters(elems=elems,pipetype=self._pipetype)
                         return aux
                 except:
                         return {"status":"ko"}
@@ -476,7 +481,7 @@ class GraphMongo(MongoClient, set):
 			##defining pipeline method output
 			self._pipetype = "node"
 			aux = self._CopyObject() 
-			aux.SetParameters(results=elems)
+			aux.SetParameters(elems=elems,pipetype=self._pipetype)
 			return aux
 		except:
 	                return {"status":"ko"}
@@ -530,7 +535,7 @@ class GraphMongo(MongoClient, set):
 			elems = elems - set(self._accumulated)
 
 		aux = self._CopyObject() ### pipeline method
-		aux.SetParameters(results=elems)
+		aux.SetParameters(elems=elems,pipetype=self._pipetype)
 		aux._accumulated = aux._accumulated | set(nodes) ##we accumulated nodes and edges without distinction
 		#if self._pipetype == "node":
                 #	aux._accumulated = aux._accumulated | set(nodes) 
@@ -996,6 +1001,15 @@ def Queries():
 	print set(nodes1)
 	nodes1 = nodes.GetNeighbours(disjunction=["nodes","accumulated"])
         print set(nodes1)
+
+	
+	print "\nPassing elements as a parameter for creating new objects"
+	nodes = graph.GetNodes(query={"weight":6})
+	print set(nodes)
+	newnodes = GraphMongo(address="localhost",port=27018,elems=nodes)
+	print set(newnodes)
+	print set(nodes.GetNeighbours())
+	print set(newnodes.GetNeighbours())
 
 	graph.close()
 
