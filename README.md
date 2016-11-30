@@ -32,7 +32,7 @@ data -> json
 ### Tutorial
 **Create graph**
 ```python
-graph = GraphMongo('localhost', 27018, "directed_graph_01")
+graph = GraphMongo('localhost', 27018, "directed_graph_01", "directed")
 ```
 **Create nodes**
 ```python
@@ -42,7 +42,7 @@ node2 = graph.AddNode(label=2)
 ```
 **Create edge**
 ```python
-edge12 = graph.AddEdge(head=node1,tail=node2)
+edge12 = graph.AddEdge(node_a=node1,node_b=node2)
 ```
 **Get nodes, filter by label and get nodes with format list of ObjectId's**
 ```python
@@ -59,7 +59,7 @@ fetchednodes = graph.Fetch(elems=relatednodes)
 ```
 
 #### Pipeline methods
-Graphmongo allow work with pipeline methods like GetNodes, GetNodes, GetNeighbours and Fetch to grasp nodes and edges from database. One of the input are the nodes or edges collection which could be treat them as a parameter of the function or pipe from previous call. This feature give us more flexibility, reuse results and maintain the different stages between calls.   
+Graphmongo allow work with pipeline methods like GetNodes, GetNodes, GetNeighbours and Fetch to grasp nodes and edges from database. One of the input are the nodes or edges collection which could be treat as a parameter of the function or pipe from previous call. This feature give us more flexibility, reuse results and maintain the different stages between calls.   
 
 **Get all nodes and fetch them**
 ```python
@@ -104,15 +104,15 @@ node4 = graph.AddNode(weight=4)
 node9 = graph.AddNode(weight=9)
 
 ##create edges
-edge65 = graph.AddEdge(head=node6,tail=node2, weight=9)
-edge61 = graph.AddEdge(head=node6,tail=node1, weight=14)
-edge63 = graph.AddEdge(head=node6,tail=node3, weight=2)
-edge13 = graph.AddEdge(head=node1,tail=node3, weight=9)
-edge12 = graph.AddEdge(head=node1,tail=node2, weight=7)
-edge23 = graph.AddEdge(head=node2,tail=node3, weight=10)
-edge24 = graph.AddEdge(head=node2,tail=node2, weight=15)
-edge34 = graph.AddEdge(head=node3,tail=node4, weight=11)
-edge45 = graph.AddEdge(head=node4,tail=node5, weight=6)
+edge65 = graph.AddEdge(node_a=node6,node_b=node2, weight=9)
+edge61 = graph.AddEdge(node_a=node6,node_b=node1, weight=14)
+edge63 = graph.AddEdge(node_a=node6,node_b=node3, weight=2)
+edge13 = graph.AddEdge(node_a=node1,node_b=node3, weight=9)
+edge12 = graph.AddEdge(node_a=node1,node_b=node2, weight=7)
+edge23 = graph.AddEdge(node_a=node2,node_b=node3, weight=10)
+edge24 = graph.AddEdge(node_a=node2,node_b=node2, weight=15)
+edge34 = graph.AddEdge(node_a=node3,node_b=node4, weight=11)
+edge45 = graph.AddEdge(node_a=node4,node_b=node5, weight=6)
 
 ##get all nodes
 nodes = graph.GetNodes()
@@ -135,6 +135,20 @@ target = graph.GetNodes(weight=4)
 gdDijkstra = graph.GraphDistance(sources=source,targets=target,algorithm=graph.Dijkstra)
 ###get shortestpath between source and targets nodes using breadth-first search algorithm for unweighted graph
 gdBFS = graph.GraphDistance(sources=source,targets=target,algorithm=graph.BreadthFirstSearch)
+```
+
+#### Import/Export
+GraphMongo allow you to import and export using one of the most popular format for graph how is graphML.
+
+```python
+##Read a graph from a file graphML
+###create new graph db instance
+graph = GraphMongo(address='localhost', port=27018, dbname="graphml")
+###import from file
+doc = graph.Reader(path="graphml.xml",algorithm=graph.GraphMLR)
+
+##Write a graph instance to graphml file format
+doc = graph.Writer(path="graphml.xml",algorithm=graph.GraphMLW)
 ```
 
 #### TODO
