@@ -11,7 +11,7 @@ the Free Software Foundation, either version 3 of the License, or
 GraphMongo is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+GNU General Public License for more denode_bs.
 
 You should have received a copy of the GNU General Public License
 along with GraphMongo.  If not, see <http://www.gnu.org/licenses/>.
@@ -33,6 +33,7 @@ Created on 01 July 2016
 import pymongo
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+import os 
 import random
 import math
 import time
@@ -40,14 +41,20 @@ import argparse
 import heapq
 import pdb
 import Queue
-
+import xml.etree.ElementTree as ET
 
 class Utils():
 	'''
 	Utils class for check, validations and wrappers
 	'''
+	
+	dictionary = {	"non-directed":"undirected",
+			"directed":"directed",
+			"node_a":"source","node_b":"target",
+			"_id":"id"}
+
 	@classmethod
-	def wrapElems(self,elem):
+	def WrapElems(self,elem):
 		'''
 		@brief: change elem type to list of ObjectId's
 		@param elem: object with elements
@@ -62,6 +69,29 @@ class Utils():
 
       		return elem
 
+	@classmethod
+	def Type(self,type,value):
+                '''
+                @brief: change elem type according to type string value
+                @param type: string type value
+                @param value: string value
+                @return: value casted to correct type
+                '''
+		if type == "string":
+			value = str(value)
+		elif type == "float":
+			value = float(value)			
+		elif type == "int":
+			value = int(value)			
+		return value
+
+	@classmethod
+        def GetDictionary(self):
+                '''
+                @brief: get graph dictionary
+                @return: graph concepts dictionary 
+                '''
+		return self.dictionary
 
 class GraphMongo(MongoClient, list):
 	'''
@@ -72,32 +102,42 @@ class GraphMongo(MongoClient, list):
 	port = 27017           	###databae listen port
 
 	_ddbb = "graph"        	###database name
+	_type = "directed"      ###graph type
 	_node = "node"         	###collection name for nodes
-	_edge = "edge"         	###collection name for esges
+	_edge = "edge"         	###collection name for edges
+	_metadata = "metadata"  ###collection name for metadata
 
 	_accumulated = list() 	###adding nodes from previous queries
 	_pipetype = "node" 	###pipe type for pipe feature of some functions
 
+	_schema = {	"_id" :		{"name":"id","type":"string","for":["node","edge"]},
+			"weight" :	{"name":"weight","type":"int","for":["node","edge"]},
+			"node_a" :	{"name":"source","type":"string","for":["edge"]},
+			"node_b" :	{"name":"target","type":"string","for":["edge"]},
+			"label" :	{"name":"label","type":"string","for":["node","edge"]},
+			"data" :	{"name":"data","type":"string","for":["node","edge"]}}
 
-	def __init__(self, address="localhost", port=27017, dbname="graph", elems=None, connection=True):
+	def __init__(self, address="localhost", port=27017, dbname="graph", type=None, elems=None, connection=True):
 		''' 
         	@brief: init a connection with mongo ddbb
         	@param address: ip address where the database is located 
         	@param port: port where the database is listening
 		@param dbname: name for the graph database
+		@param type: graph type name ["directed","non-directed"]
                 @param elems: list of ObjectId to initialize the instance with previous queries 
 		'''
-		self.SetParameters(address,port,dbname,elems)
+		self.SetParameters(address,port,dbname,type,elems)
 		if connection == True:
 			super(GraphMongo,self).__init__(self.address,self.port)
 		
 
-        def SetParameters(self, address=None, port=None, dbname=None, elems=None, pipetype=None):
+        def SetParameters(self, address=None, port=None, dbname=None, type=None, elems=None, pipetype=None):
                 '''
                 @brief: set parameters like address and port of the mongo instance, name of the database and results of previous query
                 @param address: ip address where the database is located
                 @param port: port where the database is listening
                 @param dbname: name for the graph database
+		@param type: graph type name ["directed","non-directed"]
                 @param elems: list of ObjectId to initialize the instance with previous queries
                 '''
                 if address is not None:
@@ -108,8 +148,17 @@ class GraphMongo(MongoClient, list):
                         MongoClient.__init__(self,self.address,self.port)
                 if dbname is not None:
                         self._ddbb = dbname
+		aux = self[self._ddbb][self._metadata].find({})
+		if type is not None:
+			self._type = type
+			self[self._ddbb][self._metadata].remove()
+			self[self._ddbb][self._metadata].insert_one({"type":self._type})
+		elif type is None and (aux is None or aux.count()==0):
+			self[self._ddbb][self._metadata].insert_one({"type":self._type})
+		else:
+			self._type = list(aux)[0]["type"]
                 if elems is not None:
-			elements = Utils.wrapElems(elems)
+			elements = Utils.WrapElems(elems)
                         del self[:]
                         self[:] = elements[:]
 			if isinstance(elems,GraphMongo):
@@ -124,9 +173,11 @@ class GraphMongo(MongoClient, list):
 		@return: GraphMongo element
 		'''
 		##don't need to open a new connection because was already opened
-		graph = GraphMongo(address=self.address, port=self.port, dbname=self._ddbb, elems=self, connection=False) 
+		graph = GraphMongo(address=self.address, port=self.port, dbname=self._ddbb, type=self._type, elems=self, connection=False) 
 		graph._accumulated = self._accumulated	
 		graph._pipetype = self._pipetype
+		graph._type = self._type
+		graph._ddbb = self._ddbb
 
 		return graph
 
@@ -145,17 +196,19 @@ class GraphMongo(MongoClient, list):
 		return aux
 
         
-	def ClearGraph(self, nodes=True, edges=True):
+	def ClearGraph(self, nodes=True, edges=True, metadata=False):
                 '''
                 @brief: remove all nodes and edges of the ddbb taking account the params
                 @param nodes: option to delete all nodes
                 @param edges: option to delete all edges
+                @param metadata: option to delete metadata
                 '''
                 if nodes:
                         self[self._ddbb][self._node].remove()
                 if edges:
                         self[self._ddbb][self._edge].remove()
-
+		if metadata:
+			self[self._ddbb][self._metadata].remove()	
 
 	def AddNode(self,node=None, label=None, weight=None, data=None):
 		'''
@@ -189,14 +242,13 @@ class GraphMongo(MongoClient, list):
 		except:
 			return {"status":"ko"}
 
-	def AddEdge(self, edge=None, label=None, weight=None, head=None, tail=None, data=None, type="directed"):
+	def AddEdge(self, edge=None, label=None, weight=None, node_a=None, node_b=None, data=None):
 		'''
 		@brief: create a new edge in the ddbb
-		@param edge: dictionary with an edge definition, params: _id, label, head (node 1), tail(node 2) and data
+		@param edge: dictionary with an edge definition, params: _id, label, node_a (node 1), node_b(node 2) and data
 		@param label: relation name of the edge
                 @param weight: weight of the edge
 		@param data: extra information
-		@param type: type of the edge, "directed" or "simple"
 		@return: edge created in the ddbb, otherwise an error is returned as dictionary with status ko
         	'''
 		try:
@@ -216,20 +268,15 @@ class GraphMongo(MongoClient, list):
                         if weight is not None:
                                 edge["weight"]=weight
 		
-			if type is not None and type not in ["directed","simple"]:
-				return {"status":"ko"}
-			else:
-				edge["type"]=type
-
-			if head is not None and tail is not None:
+			if node_a is not None and node_b is not None:
 				if type == "simple":
 					pass ##TODO simple and bidirectional graph
 				else:
-					headref = {"_id" : head["_id"]}
-                        		tailref = {"_id" : tail["_id"]}
+					node_aref = {"_id" : node_a["_id"]}
+                        		node_bref = {"_id" : node_b["_id"]}
 			
-				edge["head"]=headref
-                                edge["tail"]=tailref
+				edge["node_a"]=node_aref
+                                edge["node_b"]=node_bref
 	
 			self[self._ddbb][self._edge].insert(edge)
 			return edge
@@ -252,8 +299,8 @@ class GraphMongo(MongoClient, list):
 
 	def UpdateEdge(self, edge=None):
                 '''
-                @brief: update desired edge, _id, head and tail cannot be updated, remove edge and create another one
-                @param edge: dictionary with an edge definition, params: _id, label, head (node 1), tail(node 2) and data
+                @brief: update desired edge, _id, node_a and node_b cannot be updated, remove edge and create another one
+                @param edge: dictionary with an edge definition, params: _id, label, node_a (node 1), node_b(node 2) and data
                 @return: edge updated in the ddbb otherwise an error is returned as dictionary with status=ko
                 '''
                 if edge is None:
@@ -278,19 +325,19 @@ class GraphMongo(MongoClient, list):
 
 			###removes edges in and out
 			ref = {"_id" : node["_id"], "label" : node["label"]}
-			head = {"head" : ref}
-			tail = {"tail" : ref}
+			node_a = {"node_a" : ref}
+			node_b = {"node_b" : ref}
 		
-			self[self._ddbb][self._edge].remove(head)	
-			self[self._ddbb][self._edge].remove(tail)	
+			self[self._ddbb][self._edge].remove(node_a)	
+			self[self._ddbb][self._edge].remove(node_b)	
 			return {"status":"ok"}
 		except:
 			return {"status":"ko"}
 
 	def RemoveEdge(self, edge=None):
 		'''
-		@brief: remove an specific edge head the ddbb
-		@param edge: dictionary with an edge definition, params: _id, label, head (node 1), tail(node 2) and data
+		@brief: remove an specific edge node_a the ddbb
+		@param edge: dictionary with an edge definition, params: _id, label, node_a (node 1), node_b(node 2) and data
 		@return: dictionary with status 'ok' or 'ko'
 		'''
 		
@@ -341,7 +388,7 @@ class GraphMongo(MongoClient, list):
         def Fetch(self, elems=None, type="node", projection=None, sort=None, paging=None):
                 '''
                 @brief: generic fetch function to grasp from ddbb a list of elements
-                @param elem: element search head ddbb
+                @param elem: element search node_a ddbb
                 @param type: type element, node or edge
                 @param projection: list of attributes you want retrive {"attribute_name":"false|true",...}
                 @param sort: list of attributes you want sort the results in mongodb sort format, {"attributename":"ascending|descending",...}
@@ -355,7 +402,7 @@ class GraphMongo(MongoClient, list):
 			if elems is None: ###pipeline method
 				elems = self[:]
 			else:
-				elems = Utils.wrapElems(elems)# and isinstance(elems,set):
+				elems = Utils.WrapElems(elems)# and isinstance(elems,set):
 
                         ids = elems
                         if len(ids) > 0:
@@ -384,7 +431,7 @@ class GraphMongo(MongoClient, list):
 	
 	def __Get(self, elems=None, type=None, query=None):
 		'''
-		@brief: generic get function get an element head the ddbb with a parametrized resource, node or edge
+		@brief: generic get function get an element node_a the ddbb with a parametrized resource, node or edge
 		@param elems: list of ObjectId's 
 		@param type: type element, node or edge
 		@param query: mongodb expression query applyed in the ddbb
@@ -395,7 +442,7 @@ class GraphMongo(MongoClient, list):
 			if query is None:
 				query = {}
 				
-				###if there is no id tail get, then we will get everything
+				###if there is no id node_b get, then we will get everything
 				if elems and len(elems) > 0:
 					query["_id"]={}
 					query["_id"]["$in"]=elems		
@@ -412,13 +459,13 @@ class GraphMongo(MongoClient, list):
 			return {"status":"ko"}
 
 
-	def GetEdges(self, edges=None, head=None, tail=None, label=None, weight=None, direction=None, query=None):
+	def GetEdges(self, edges=None, node_a=None, node_b=None, label=None, weight=None, direction=None, query=None):
 		'''
                 @brief: get list of edges given id's, label or quering
                 @param edges: list of edges
 		@param label: label of the node or relation
                 @param weight: weight of the node or relation
-                @param direction: direction of the relation, "head|tail"
+                @param direction: direction of the relation, "node_a|node_b"
                 @param query: mongodb expression query applyed in the ddbb
 		@return list of edges, otherwise an error is returned as dictionary with status ko
 		'''
@@ -433,12 +480,12 @@ class GraphMongo(MongoClient, list):
                         if weight is not None:
                                 query.update({"weight" : weight})	
 			
-                        if head is not None:
-				head = Utils.wrapElems(head)
-				query.update({"head._id" : {"$in" : head}})
-			if tail is not None:
-                                tail = Utils.wrapElems(tail)
-				query.update({"tail._id" : {"$in" : tail}})
+                        if node_a is not None:
+				node_a = Utils.WrapElems(node_a)
+				query.update({"node_a._id" : {"$in" : node_a}})
+			if node_b is not None:
+                                node_b = Utils.WrapElems(node_b)
+				query.update({"node_b._id" : {"$in" : node_b}})
                         
 			elems = set(self.__Get(elems=edges, type="edge", query=query))
 
@@ -491,7 +538,7 @@ class GraphMongo(MongoClient, list):
                 @param edges: list of ObjectId's of edges
                 @param label: label of the node or relation
                 @param weight: weight of the node or relation
-                @param direction: direction of the relation, "head|tail"
+                @param direction: direction of the relation, "node_a|node_b"
                 @param query: mongodb expression query applyed in the ddbb
 		@param disjunction: option to delete in the result the previous queries
                 @return: graphmongo instance with list of nodes, otherwise an error is returned as dictionary with status ko
@@ -511,17 +558,23 @@ class GraphMongo(MongoClient, list):
 			nodes = list()	
 		if nodes is None and edges is not None:
 			nodes = list()
-			edges = Utils.wrapElems(edges)
-                        elems += self.__GetNodeNeighbours(edges=edges, direction=direction)
+			edges = Utils.WrapElems(edges)
+			if self._type == "non-directed":
+				aux = self.__GetNodeNeighbours(edges=edges, direction="node_a")
+				aux += self.__GetNodeNeighbours(edges=edges, direction="node_b")
+				elems += list(set(aux))
+			else:
+                        	elems += self.__GetNodeNeighbours(edges=edges, direction=direction)
 		else:
-			nodes = Utils.wrapElems(nodes)
-			edges = Utils.wrapElems(edges)
-			elems = self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction=direction)
+			nodes = Utils.WrapElems(nodes)
+			edges = Utils.WrapElems(edges)
+			if self._type == "non-directed":
+				aux = self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction="node_a")
+				aux += self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction="node_b")
+				elems = list(set(aux))
+			else:
+				elems = self.__GetNodeNeighbours(nodes=nodes, edges=edges, label=label, weight=weight, query=query, direction=direction)
               
-
-		#if disjunction is None or ("nodes","accumulated") not in disjunction: 
-		#elems = set(elems) 
-	
 		if disjunction is None:
 			disjunction = list()	
 		if "nodes" in disjunction:
@@ -532,10 +585,6 @@ class GraphMongo(MongoClient, list):
 		aux = self._CopyObject() ### pipeline method
 		aux.SetParameters(elems=elems,pipetype=self._pipetype)
 		aux._accumulated = list(set(aux._accumulated) | set(nodes)) ##we accumulated nodes and edges without distinction
-		#if self._pipetype == "node":
-                #	aux._accumulated = aux._accumulated | set(nodes) 
-		#else:
-		#	aux._accumulated = set(nodes)	
 
 		return aux
 
@@ -543,30 +592,30 @@ class GraphMongo(MongoClient, list):
         def __GetNodeNeighbours(self, nodes=None, edges=None, label=None, weight=None, query=None, direction=None):
                 '''
                 @brief: get list of nodes related with the nodes given in the parameter, also label and direction can be specified
-                @param nodes: list of ObjectId's of nodes tail or head
+                @param nodes: list of ObjectId's of nodes node_b or node_a
 		@param edges: list of ObjectId's of edges
                 @param label: label of the node or relation
                 @param weight: weight of the node or relation
-		@param direction: direction of the relation, head or tail
+		@param direction: direction of the relation, node_a or node_b
                 @param projection: list of attributes you want retrive {"attribute_name":"false|true",...}
                 @param sort: list of attributes you want sort the results in mongodb sort format, {"attributename":"ascending|descending",...}
                 @param paging: page and per_page, start index page and the number of entries shown per page
                 @return: list of nodes, otherwise an error is returned as dictionary with status ko
 		'''
 
-		###direction have tail be "head" or "tail" depending if we want tail retrieve head or tail
-		if direction is not None and direction not in ["head","tail"]:
+		###direction have node_b be "node_a" or "node_b" depending if we want node_b retrieve node_a or node_b
+		if direction is not None and direction not in ["node_a","node_b"]:
 			return {"status":"ko"}
 		try:
 			if direction is None:
-				FROM = "head"	
-				TO = "tail"
+				FROM = "node_a"	
+				TO = "node_b"
 			else:
 				FROM = direction
-				if FROM == "head":
-					TO = "tail"
-				elif FROM == "tail":
-					TO = "head"
+				if FROM == "node_a":
+					TO = "node_b"
+				elif FROM == "node_b":
+					TO = "node_a"
 
 			if label is not None:
 				if query is None:
@@ -654,11 +703,11 @@ class GraphMongo(MongoClient, list):
 			nodes = self.GetNodes()
 		
 		if nodes:
-			nodes = Utils.wrapElems(nodes)
+			nodes = Utils.WrapElems(nodes)
 
 		for node in nodes:
-		        outdegree = self.__GetNodeNeighbours(nodes=[node],direction="tail")
-	                indegree = self.__GetNodeNeighbours(nodes=[node],direction="head")
+		        outdegree = self.__GetNodeNeighbours(nodes=[node],direction="node_b")
+	                indegree = self.__GetNodeNeighbours(nodes=[node],direction="node_a")
 			degree = len(outdegree)+len(indegree)
 			elems[node]=degree
 		return elems	
@@ -680,10 +729,10 @@ class GraphMongo(MongoClient, list):
 			targets = self.GetNodes()
 
 		if sources:
-			sources = Utils.wrapElems(sources)			
+			sources = Utils.WrapElems(sources)			
 
                 if targets:
-			targets = Utils.wrapElems(targets)
+			targets = Utils.WrapElems(targets)
 		
 		elems={}
 		
@@ -797,7 +846,7 @@ class GraphMongo(MongoClient, list):
                                         dist[v] = float('inf')
 
 				###get distance between nodes
-				edges = self.GetEdges(head=u,tail=v).Fetch(type="edge")
+				edges = self.GetEdges(node_a=u,node_b=v).Fetch(type="edge")
 				distance = float('inf')
 				for edge in edges:
 					if edge["weight"]<distance:
@@ -812,10 +861,154 @@ class GraphMongo(MongoClient, list):
 		return {"distance":dist,"from":prev}	
 
 
-def CreateDirectedGraph():
+	def Reader(self,doc=None,path=None,algorithm=None):
+		'''
+                @brief: read a document in graph format standard to translate to graphmongo database
+                @param doc: document to read 
+		@param path: path to the document to read
+		@param algorithm: document's format to read [GraphML, GML, NCOL]
+		@return: graphmongo instance with read data, otherwise dictionary with the status if was everything ok or not
+                '''
+		if doc is None and path is not None:
+			doc = ET.parse(path) ###read document from file
+			doc = ET.tostring(doc.getroot(),encoding='utf-8',method='xml')
+		if doc is None:
+			return {"status":"ko"}
+		if algorithm is None:
+			algorithm = self.GraphMLR
+		return algorithm(doc)		
 
+	def GraphMLR(self,doc):
+		doc = ET.fromstring(doc)	
+		schema={}
+		for key in doc.findall("key"):
+			attrtype = key.get("attr.type")
+			name = key.get("attr.name")
+			forvalue = key.get("for")
+			id = key.get("id")
+			object = {"id":id,"type":attrtype,"name":name,"for":forvalue}
+			if id not in schema.keys():
+				schema[id] = {}
+			schema[id][forvalue]=object
+
+		###graphtype
+		graph = doc.find("graph")
+		graphtype = graph.get("edgedefault") 
+	
+		##clear graph	
+		self.ClearGraph(metadata=True)	
+		self[self._ddbb][self._metadata].insert_one({"type":graphtype})
+		###read nodes
+		for node in graph.findall("node"):
+			nodeaux = {}
+                        id = node.get("id")
+			nodeaux["_id"] = id
+			attrs=[]
+			for data in node.findall("data"):
+				attr = {"key":data.get("key"),"value":data.text}	
+				key = attr["key"]
+				value = attr["value"]
+				attrtype = schema[key]["node"]["type"] 
+				value = Utils.Type(attrtype,value)
+				nodeaux[key] = value
+			self.AddNode(node=nodeaux)
+		###read edges	
+		for edge in graph.findall("edge"):
+			edgeaux = {}
+                        id = edge.get("id")
+			source = edge.get("source")
+			target = edge.get("target")
+			edgeaux = {"_id":id,"node_a":source,"node_b":target}
+			attrs=[]
+			for data in edge.findall("data"):
+			        attr = {"key":data.get("key"),"value":data.text}
+                                key = attr["key"]
+                                value = attr["value"]
+                                attrtype = schema[key]["node"]["type"]
+                                value = Utils.Type(attrtype,value)
+                                edgeaux[key] = value
+			self.AddEdge(edge=edgeaux)
+
+	def Writer(self,path=None,algorithm=None):
+                '''
+                @brief: write a document in graph format standard from graphmongo database
+		@param path: path to the document to write
+                @param algorithm: document's format to write [GraphML, GML, NCOL]
+                @return: document to write
+                '''
+		if algorithm is None:
+			algorithm = self.GraphML
+
+		doc = algorithm()
+		if path is None:
+			path = "output_graph"
+		file = open(path,"w")
+		file.write(doc)
+		file.close()	
+
+		return doc
+
+        def GraphMLW(self):
+                '''
+                @brief: write a document in graphML format standard from graphmongo database
+                @return: document to write
+                '''
+		dictionary = Utils.GetDictionary()
+		schema = self._schema
+
+		###construct template
+                graphml = ET.Element('graphml')
+                graph = ET.SubElement(graphml,'graph')
+		##construct schema
+		for item in schema:
+			if item in ["_id","node_a","node_b"]:
+				continue
+			item = schema[item]
+			for value in item["for"]:
+				key = ET.SubElement(graphml,"key")	
+				key.set("id",item["name"])
+				key.set("for",value)
+				key.set("attr.name",item["name"])
+				key.set("attr.type",item["type"])
+						
+		graphtype = self[self._ddbb][self._metadata].find_one({})["type"]
+                graph.set("edgedefault",dictionary[graphtype])
+		elems = self[self._ddbb][self._node].find({})
+            	for elem in elems:    
+			node = ET.SubElement(graph,'node')
+			for key in elem.keys():
+				value = elem[key]
+				if key in schema.keys() and key not in ["_id","node_a","node_b"]:
+					data = ET.SubElement(node,'data')
+					data.set("key",str(key))
+					data.text=str(value)
+				else:
+					if key in dictionary:
+						key = dictionary[key]
+					node.set(key,str(value))
+
+            	elems = self[self._ddbb][self._edge].find({})
+                for elem in elems:
+                        edge = ET.SubElement(graph,'edge')
+                        for key in elem.keys():
+                                value = elem[key]
+				if key in schema.keys() and key not in ["_id","node_a","node_b"]:
+                                       	data = ET.SubElement(edge,'data')
+                                        data.set("key",str(key))
+                                        data.text=str(value) 
+				else:
+					if key in ["node_a","node_b"]:
+						value = value["_id"]
+                                	if key in dictionary:
+                                        	key = dictionary[key]
+                                	edge.set(key,str(value))
+
+                return ET.tostring(graphml,encoding='utf-8',method='xml')
+
+
+def CreateDirectedGraph(name):
 	##create instance for graphAPI for mongodb
-        graph = GraphMongo('localhost', 27018, dbname="graph")
+        graph = GraphMongo('localhost', 27018, dbname=name, type="directed")
 	##remove all previous data, nodes and edges 
         graph.ClearGraph()
 
@@ -829,40 +1022,38 @@ def CreateDirectedGraph():
         node9 = graph.AddNode(weight=9)
 	
 	##create edges
-        edge65 = graph.AddEdge(head=node6,tail=node5, weight=9)
-        edge56 = graph.AddEdge(head=node5,tail=node6, weight=9)
+        edge65 = graph.AddEdge(node_a=node6,node_b=node5, weight=9)
+        edge56 = graph.AddEdge(node_a=node5,node_b=node6, weight=9)
         
-	edge61 = graph.AddEdge(head=node6,tail=node1, weight=14)
-        edge16 = graph.AddEdge(head=node1,tail=node6, weight=14)
+	edge61 = graph.AddEdge(node_a=node6,node_b=node1, weight=14)
+        edge16 = graph.AddEdge(node_a=node1,node_b=node6, weight=14)
 	
-	edge63 = graph.AddEdge(head=node6,tail=node3, weight=2)
-        edge36 = graph.AddEdge(head=node3,tail=node6, weight=2)
+	edge63 = graph.AddEdge(node_a=node6,node_b=node3, weight=2)
+        edge36 = graph.AddEdge(node_a=node3,node_b=node6, weight=2)
 	
-	edge13 = graph.AddEdge(head=node1,tail=node3, weight=9)
-        edge31 = graph.AddEdge(head=node3,tail=node1, weight=9)
+	edge13 = graph.AddEdge(node_a=node1,node_b=node3, weight=9)
+        edge31 = graph.AddEdge(node_a=node3,node_b=node1, weight=9)
         
-	edge12 = graph.AddEdge(head=node1,tail=node2, weight=7)
-        edge21 = graph.AddEdge(head=node2,tail=node1, weight=7)
+	edge12 = graph.AddEdge(node_a=node1,node_b=node2, weight=7)
+        edge21 = graph.AddEdge(node_a=node2,node_b=node1, weight=7)
         
-	edge23 = graph.AddEdge(head=node2,tail=node3, weight=10)
-        edge32 = graph.AddEdge(head=node3,tail=node2, weight=10)
+	edge23 = graph.AddEdge(node_a=node2,node_b=node3, weight=10)
+        edge32 = graph.AddEdge(node_a=node3,node_b=node2, weight=10)
 
-	edge24 = graph.AddEdge(head=node2,tail=node2, weight=15)
-	edge42 = graph.AddEdge(head=node4,tail=node4, weight=15)
+	edge24 = graph.AddEdge(node_a=node2,node_b=node2, weight=15)
+	edge42 = graph.AddEdge(node_a=node4,node_b=node4, weight=15)
 	
-        edge34 = graph.AddEdge(head=node3,tail=node4, weight=11)
-        edge43 = graph.AddEdge(head=node4,tail=node3, weight=11)
+        edge34 = graph.AddEdge(node_a=node3,node_b=node4, weight=11)
+        edge43 = graph.AddEdge(node_a=node4,node_b=node3, weight=11)
         
-	edge45 = graph.AddEdge(head=node4,tail=node5, weight=6)
-        edge54 = graph.AddEdge(head=node5,tail=node4, weight=6)
+	edge45 = graph.AddEdge(node_a=node4,node_b=node5, weight=6)
+        edge54 = graph.AddEdge(node_a=node5,node_b=node4, weight=6)
       
 	graph.close() 
 
-def CreateSimpleGraph():
-
+def CreateSimpleGraph(name):
         ##create instance for graphAPI for mongodb
-        graph = GraphMongo('localhost', 27018)
-	graph.SetParameters(dbname="graph")
+        graph = GraphMongo('localhost', 27018, dbname=name, type="non-directed")
         ##remove all previous data, nodes and edges
         graph.ClearGraph()
 
@@ -873,26 +1064,27 @@ def CreateSimpleGraph():
         node1 = graph.AddNode(weight=1)
         node2 = graph.AddNode(weight=2)
         node4 = graph.AddNode(weight=4)
-        node9 = graph.AddNode(weight=9)
+        #node9 = graph.AddNode(weight=9)
 
         ##create edges
-        edge65 = graph.AddEdge(head=node6,tail=node2, weight=9, type="simple")
-        edge61 = graph.AddEdge(head=node6,tail=node1, weight=14, type="simple")
-        edge63 = graph.AddEdge(head=node6,tail=node3, weight=2, type="simple")
-        edge13 = graph.AddEdge(head=node1,tail=node3, weight=9, type="simple")
-        edge12 = graph.AddEdge(head=node1,tail=node2, weight=7, type="simple")
-        edge23 = graph.AddEdge(head=node2,tail=node3, weight=10, type="simple")
-        edge24 = graph.AddEdge(head=node2,tail=node2, weight=15, type="simple")
-        edge34 = graph.AddEdge(head=node3,tail=node4, weight=11, type="simple")
-        edge45 = graph.AddEdge(head=node4,tail=node5, weight=6, type="simple")
+        edge65 = graph.AddEdge(node_a=node6,node_b=node2, weight=9)
+        edge61 = graph.AddEdge(node_a=node6,node_b=node1, weight=14)
+        edge63 = graph.AddEdge(node_a=node6,node_b=node3, weight=2)
+        edge13 = graph.AddEdge(node_a=node1,node_b=node3, weight=9)
+        edge12 = graph.AddEdge(node_a=node1,node_b=node2, weight=7)
+        edge23 = graph.AddEdge(node_a=node2,node_b=node3, weight=10)
+        edge24 = graph.AddEdge(node_a=node2,node_b=node2, weight=15)
+        edge34 = graph.AddEdge(node_a=node3,node_b=node4, weight=11)
+        edge45 = graph.AddEdge(node_a=node4,node_b=node5, weight=6)
 
 	graph.close()
 
 
-def Queries():
+def Queries(name):
 	##create instance for graphAPI for mongodb
-        graph = GraphMongo('localhost', 27018)
-
+        graph = GraphMongo('localhost', 27018, dbname=name)
+	print graph._type
+	
 	print "##### GET NODES AND NEIGHTBOURS #####"
 	print "\nGet one node"
 	nodes = graph.GetNodes(weight=6)
@@ -943,20 +1135,20 @@ def Queries():
         print docs[:]
 
 	print "\nget nodes FROM given a list of nodes and weight, in a directed graph"
-	docs = nodes.GetNeighbours(weight=6,direction="head")
+	docs = nodes.GetNeighbours(weight=6,direction="node_a")
         print docs[:]
         print "\nget nodes TO given a list of nodes and weight, in a directed graph"
-        docs = graph.GetNeighbours(weight=6,direction="tail")
+        docs = graph.GetNeighbours(weight=6,direction="node_b")
         print docs[:]
        
 	print "\nget nodes FROM given a weight, in a directed graph"	
-	docs = graph.GetNeighbours(weight=6,direction="head")
+	docs = graph.GetNeighbours(weight=6,direction="node_a")
         print docs[:]
         print "\nget nodes TO given a weight, in a directed graph"
-        docs = graph.GetNeighbours(weight=6,direction="tail")
+        docs = graph.GetNeighbours(weight=6,direction="node_b")
         print docs[:]
 	print "\nget nodes FROM given a query by weight, in a directed graph"
-        docs = graph.GetNeighbours(query={"weight":{"$in":[6,15]}},direction="head")
+        docs = graph.GetNeighbours(query={"weight":{"$in":[6,15]}},direction="node_a")
         print docs[:]
 	
 	print "\nget edges by weight"
@@ -973,10 +1165,10 @@ def Queries():
 	print doc[:]
 	
 	print "\nget nodes FROM by edges"
-        doc = graph.GetNeighbours(edges=edges, direction="head")
+        doc = graph.GetNeighbours(edges=edges, direction="node_a")
         print doc[:]
         print "\nget nodes TO by edges"
-        doc = graph.GetNeighbours(edges=edges, direction="tail")
+        doc = graph.GetNeighbours(edges=edges, direction="node_b")
         print doc[:]
 
 	print "\nFetch edges from a list"
@@ -1000,16 +1192,16 @@ def Queries():
 	print "\nPassing elements as a parameter for creating new objects"
 	nodes = graph.GetNodes(query={"weight":6})
 	print nodes[:]
-	newnodes = GraphMongo(address="localhost",port=27018,elems=nodes)
+	newnodes = GraphMongo(address="localhost",port=27018,dbname=name,elems=nodes)
 	print newnodes[:]
 	print nodes.GetNeighbours()[:]
 	print newnodes.GetNeighbours()[:]
 
 	graph.close()
 
-def Metrics():
+def Metrics(name):
         ##create instance for graphAPI for mongodb
-        graph = GraphMongo('localhost', 27018)
+        graph = GraphMongo('localhost', 27018, dbname=name)
 
 	print "##### Basic Measures #####"
 	print "\nVertex Count"
@@ -1074,22 +1266,34 @@ if __name__ == '__main__':
         parser = argparse.ArgumentParser(description="Testing GraphMongo API")
         parser.add_argument("-c","--create",required=False)
         parser.add_argument("-t","--test",required=False, help="test options values [m,q] -> ex: mq")
+        parser.add_argument("-n","--name",required=False, help="name of graph db ['directed-graph','non-directed=graph']")
         args=parser.parse_args()
+
+	name=args.name
 
 	if args.create is not None and args.create == 'True':
 		print "******************************** CREATING GRAPH ********************************"
-		CreateDirectedGraph()
+		if name == "directed-graph":
+			CreateDirectedGraph(name)
+		elif name == "non-directed-graph":
+			CreateSimpleGraph(name)
 
         if args.test is not None and "m" in args.test:
                 print "\n************************* TESTING METRICS AND MEASURES **************************"
-                Metrics()
+                Metrics(name)
 	
 	if args.test is not None and "q" in args.test:
 		print "\n******************************** TESTING QUERIES ********************************"
-		Queries()
+		Queries(name)
 	
 	if args.test is not None and "p" in args.test:
 		print "\n******************************** TESTING PIPELINE ********************************"
-		graph = GraphMongo(address='localhost', port=27018)
-		elems = graph.GetNodes().GetNeighbours().Fetch()
-		print elems	
+		##get non-directed-graph from mongodb
+		graph = GraphMongo(address='localhost', port=27018, dbname="non-directed-graph")
+		
+		##write graph to graphml file format
+		doc = graph.Writer(path="graphml.xml",algorithm=graph.GraphMLW)
+
+		##create new graph db from graphml file	
+		graph = GraphMongo(address='localhost', port=27018, dbname="graphml")
+		doc = graph.Reader(path="graphml.xml",algorithm=graph.GraphMLR)
