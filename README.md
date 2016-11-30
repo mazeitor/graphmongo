@@ -29,6 +29,12 @@ data -> json
 + Dependencies: [python 2.7](https://wiki.python.org/moin/BeginnersGuide/Download), [pymongo](https://docs.mongodb.com/getting-started/python/client/) and [mongodb](https://docs.mongodb.com/manual/installation/?jmp=footer)
 + Download and use graphmongo.py
 
+Once all dependencies are installed in our machine, we can run an instance of mongodb:
+```bash
+mongod --port 27018 --dbpath ~/databases/graphmongo
+```
+At this point, we can start to play !!
+
 ### Tutorial
 **Create graph**
 ```python
