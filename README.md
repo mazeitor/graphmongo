@@ -138,7 +138,7 @@ gdBFS = graph.GraphDistance(sources=source,targets=target,algorithm=graph.Breadt
 ```
 
 #### Import/Export
-GraphMongo allow you to import and export using one of the most popular format for graph how is graphML.
+GraphMongo allow you to import and export using one of the most popular format for graph how is [graphML](http://graphml.graphdrawing.org/).
 
 ```python
 ##Read a graph from a file graphML
