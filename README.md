@@ -1,5 +1,5 @@
 ## GraphMongo: graph framework for mongodb
-Minimalist framework to work with directed graphs using mongo database and python language programming.
+Minimalist framework to work with directed and non-directed graphs using mongo database and python language programming.
 
 ### Features
 * Create and remove graph
@@ -7,9 +7,10 @@ Minimalist framework to work with directed graphs using mongo database and pytho
 * Filter vertex and edges using mongodb query language
 * Fetch vertex and edges
 * Use paging, sort and selects
-* Get head and tail neighbours
+* Get source and target neighbours
 * Deal with multiple graph at the same time
 * Use pipeline methods
+* Reader/Writer with graphML format
 
 #### Measures and metrics
 * Vertex and edges count (number of vertices)
