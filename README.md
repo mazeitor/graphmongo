@@ -1,5 +1,5 @@
 ## GraphMongo: graph framework for mongodb
-Minimalist framework to work with directed graphs using mongo database and python language programming.
+Minimalist framework to work with directed and non-directed graphs using mongo database and python language programming.
 
 ### Features
 * Create and remove graph
@@ -7,9 +7,10 @@ Minimalist framework to work with directed graphs using mongo database and pytho
 * Filter vertex and edges using mongodb query language
 * Fetch vertex and edges
 * Use paging, sort and selects
-* Get head and tail neighbours
+* Get source and target neighbours
 * Deal with multiple graph at the same time
 * Use pipeline methods
+* Reader/Writer with graphML format
 
 #### Measures and metrics
 * Vertex and edges count (number of vertices)
@@ -31,7 +32,7 @@ data -> json
 ### Tutorial
 **Create graph**
 ```python
-graph = GraphMongo('localhost', 27018, "directed_graph_01")
+graph = GraphMongo('localhost', 27018, "directed_graph_01", "directed")
 ```
 **Create nodes**
 ```python
@@ -41,7 +42,7 @@ node2 = graph.AddNode(label=2)
 ```
 **Create edge**
 ```python
-edge12 = graph.AddEdge(head=node1,tail=node2)
+edge12 = graph.AddEdge(node_a=node1,node_b=node2)
 ```
 **Get nodes, filter by label and get nodes with format list of ObjectId's**
 ```python
@@ -58,7 +59,7 @@ fetchednodes = graph.Fetch(elems=relatednodes)
 ```
 
 #### Pipeline methods
-Graphmongo allow work with pipeline methods like GetNodes, GetNodes, GetNeighbours and Fetch to grasp nodes and edges from database. One of the input are the nodes or edges collection which could be treat them as a parameter of the function or pipe from previous call. This feature give us more flexibility, reuse results and maintain the different stages between calls.   
+Graphmongo allow work with pipeline methods like GetNodes, GetNodes, GetNeighbours and Fetch to grasp nodes and edges from database. One of the input are the nodes or edges collection which could be treat as a parameter of the function or pipe from previous call. This feature give us more flexibility, reuse results and maintain the different stages between calls.   
 
 **Get all nodes and fetch them**
 ```python
@@ -77,7 +78,7 @@ nodes = graph.GetNodes(label=6).GetNeighbours()
 edges = graph.GetEdges(label=6).GetNeighbours().Fetch()
 ```
 
-Using **disjunction** option to get desired related nodes. GetNeighbour method grasp all related nodes given as an input a collection of nodes. Sometimes, we would like other kind of answers like, related nodes are not linked with the input nodes (for instance a link between input nodes) or nodes in previous queries. We can achieve that with [Set](https://docs.python.org/2/library/sets.html) operators but when the pipe feature is used we lose this possibility. To solve that problem, the GraphMongo framework has an option to allow works with it. This option is called "disjunction" which is a list type that can takes as an option values "nodes" and "accumulated". The "nodes" value remove the input nodes from the output and the "accumulated" value removes the previous grasped nodes from the output. 
+Using **disjunction** option to get desired related nodes. GetNeighbour method grasp all related nodes given as an input a collection of nodes. Sometimes, we would like other kind of answers like, related nodes are not linked with the input nodes (for instance a link between input nodes) or nodes in previous queries. We can achieve that with [List](https://docs.python.org/2/library/functions.html?highlight=list#list) operators but when the pipe feature is used we lose this possibility. To solve that problem, the GraphMongo framework has an option to allow works with it. This option is called "disjunction" which is a list type that can takes as an option values "nodes" and "accumulated". The "nodes" value remove the input nodes from the output and the "accumulated" value removes the previous grasped nodes from the output. 
 
 ```python
 ###get related nodes of related nodes of nodes with label 6
@@ -103,15 +104,15 @@ node4 = graph.AddNode(weight=4)
 node9 = graph.AddNode(weight=9)
 
 ##create edges
-edge65 = graph.AddEdge(head=node6,tail=node2, weight=9)
-edge61 = graph.AddEdge(head=node6,tail=node1, weight=14)
-edge63 = graph.AddEdge(head=node6,tail=node3, weight=2)
-edge13 = graph.AddEdge(head=node1,tail=node3, weight=9)
-edge12 = graph.AddEdge(head=node1,tail=node2, weight=7)
-edge23 = graph.AddEdge(head=node2,tail=node3, weight=10)
-edge24 = graph.AddEdge(head=node2,tail=node2, weight=15)
-edge34 = graph.AddEdge(head=node3,tail=node4, weight=11)
-edge45 = graph.AddEdge(head=node4,tail=node5, weight=6)
+edge65 = graph.AddEdge(node_a=node6,node_b=node2, weight=9)
+edge61 = graph.AddEdge(node_a=node6,node_b=node1, weight=14)
+edge63 = graph.AddEdge(node_a=node6,node_b=node3, weight=2)
+edge13 = graph.AddEdge(node_a=node1,node_b=node3, weight=9)
+edge12 = graph.AddEdge(node_a=node1,node_b=node2, weight=7)
+edge23 = graph.AddEdge(node_a=node2,node_b=node3, weight=10)
+edge24 = graph.AddEdge(node_a=node2,node_b=node2, weight=15)
+edge34 = graph.AddEdge(node_a=node3,node_b=node4, weight=11)
+edge45 = graph.AddEdge(node_a=node4,node_b=node5, weight=6)
 
 ##get all nodes
 nodes = graph.GetNodes()
@@ -134,6 +135,20 @@ target = graph.GetNodes(weight=4)
 gdDijkstra = graph.GraphDistance(sources=source,targets=target,algorithm=graph.Dijkstra)
 ###get shortestpath between source and targets nodes using breadth-first search algorithm for unweighted graph
 gdBFS = graph.GraphDistance(sources=source,targets=target,algorithm=graph.BreadthFirstSearch)
+```
+
+#### Import/Export
+GraphMongo allow you to import and export using one of the most popular format for graph how is graphML.
+
+```python
+##Read a graph from a file graphML
+###create new graph db instance
+graph = GraphMongo(address='localhost', port=27018, dbname="graphml")
+###import from file
+doc = graph.Reader(path="data/graphml.xml",algorithm=graph.GraphMLR)
+
+##Write a graph instance to graphml file format
+doc = graph.Writer(path="data/graphml.xml",algorithm=graph.GraphMLW)
 ```
 
 #### TODO
