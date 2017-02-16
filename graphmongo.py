@@ -869,10 +869,39 @@ class GraphMongo(MongoClient, list):
         if doc is None:
             return {"status": "ko"}
         if algorithm is None:
-            algorithm = self.GraphMLR
-        return algorithm(doc)
+            algorithm = self.GraphML
+        return algorithm(doc=doc,option="r")
+    
+    def Writer(self, path=None, algorithm=None):
+        '''
+        @brief: write a document in graph format standard from graphmongo database
+        @param path: path to the document to write
+        @param algorithm: document's format to write [GraphML, GML, NCOL]
+        @return: document to write
+        '''
+        if algorithm is None:
+            algorithm = self.GraphML
 
-    def GraphMLR(self, doc):
+        doc = algorithm(option="w")
+        if path is None:
+            path = "output_graph"
+        file = open(path, "w")
+        file.write(doc)
+        file.close()
+
+        return doc
+
+    def GraphML(self,**kwargs):
+        '''
+        '''
+        option = kwargs["option"]
+        if option == "w":
+            return self.__GraphMLW()
+        elif option == "r":
+            doc = kwargs["doc"]
+            return self.__GraphMLR(doc)
+    
+    def __GraphMLR(self, doc):
         doc = ET.fromstring(doc)
         schema = {}
         for key in doc.findall("key"):
@@ -923,26 +952,7 @@ class GraphMongo(MongoClient, list):
                 edgeaux[key] = value
             self.AddEdge(edge=edgeaux)
 
-    def Writer(self, path=None, algorithm=None):
-        '''
-        @brief: write a document in graph format standard from graphmongo database
-        @param path: path to the document to write
-        @param algorithm: document's format to write [GraphML, GML, NCOL]
-        @return: document to write
-        '''
-        if algorithm is None:
-            algorithm = self.GraphML
-
-        doc = algorithm()
-        if path is None:
-            path = "output_graph"
-        file = open(path, "w")
-        file.write(doc)
-        file.close()
-
-        return doc
-
-    def GraphMLW(self):
+    def __GraphMLW(self):
         '''
         @brief: write a document in graphML format standard from graphmongo database
         @return: document to write
@@ -1289,8 +1299,8 @@ if __name__ == '__main__':
         graph = GraphMongo(address='localhost',port=27018,dbname="non-directed-graph")
 
         # write graph to graphml file format
-        doc = graph.Writer(path="graphml.xml", algorithm=graph.GraphMLW)
+        doc = graph.Writer(path="graphml.xml", algorithm=graph.GraphML)
 
         # create new graph db from graphml file
         graph = GraphMongo(address='localhost', port=27018, dbname="graphml")
-        doc = graph.Reader(path="graphml.xml", algorithm=graph.GraphMLR)
+        doc = graph.Reader(path="graphml.xml", algorithm=graph.GraphML)
