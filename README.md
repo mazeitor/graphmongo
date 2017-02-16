@@ -151,10 +151,10 @@ GraphMongo allow you to import and export using one of the most popular format f
 ###create new graph db instance
 graph = GraphMongo(address='localhost', port=27018, dbname="graphml")
 ###import from file
-doc = graph.Reader(path="data/graphml.xml",algorithm=graph.GraphMLR)
+doc = graph.Reader(path="data/graphml.xml",algorithm=graph.GraphML)
 
 ##Write a graph instance to graphml file format
-doc = graph.Writer(path="data/graphml.xml",algorithm=graph.GraphMLW)
+doc = graph.Writer(path="data/graphml.xml",algorithm=graph.GraphML)
 ```
 
 #### TODO
