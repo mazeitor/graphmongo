@@ -84,7 +84,7 @@ nodes = graph.GetNodes(label=6).GetNeighbours()
 edges = graph.GetEdges(label=6).GetNeighbours().Fetch()
 ```
 
-Using **disjunction** option to get desired related nodes. GetNeighbour method grasp all related nodes given as an input a collection of nodes. Sometimes, we would like other kind of answers like, related nodes are not linked with the input nodes (for instance a link between input nodes) or nodes in previous queries. We can achieve that with [List](https://docs.python.org/2/library/functions.html?highlight=list#list) operators but when the pipe feature is used we lose this possibility. To solve that problem, the GraphMongo framework has an option to allow works with it. This option is called "disjunction" which is a list type that can takes as an option values "nodes" and "accumulated". The "nodes" value remove the input nodes from the output and the "accumulated" value removes the previous grasped nodes from the output. 
+Using **disjunction** option to get desired related nodes. GetNeighbour method grasp all related nodes given as an input a collection of nodes. Sometimes, we would like other kind of answers like: related nodes not linked with the input nodes (for instance a link between input nodes) or maybe get the nodes in previous queries. We can achieve that with [List](https://docs.python.org/2/library/functions.html?highlight=list#list) operators but when the pipe feature is used we lose this possibility. To solve that problem, the GraphMongo framework has an option to allow works with it. This option is called "disjunction" and can take "nodes" and "accumulated" values. The "nodes" option removes the input nodes from the output and the "accumulated" option removes the previous grasped nodes from the output. 
 
 ```python
 ###get related nodes of related nodes of nodes with label 6
@@ -160,4 +160,5 @@ doc = graph.Writer(path="data/graphml.xml",algorithm=graph.GraphML)
 #### TODO
 * Implement different metrics and measures like 'connectivity', 'centrality', 'reciprocity and transitivity' and 'homophily, assortative mixing and similarity'  
 * Implement use cases like link prediction  
+* Adding query option in search methods taking account timestamps or sequences relationshit.
 
