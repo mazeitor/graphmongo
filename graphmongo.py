@@ -403,6 +403,8 @@ class GraphMongo(MongoClient, list):
             if len(ids) > 0:
                 query["_id"] = {}
                 query["_id"]["$in"] = ids
+            else:
+                return []
 
             if projection is None:
                 elems = self[self._ddbb][type].find(query)
